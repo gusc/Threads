@@ -121,8 +121,8 @@ protected:
     virtual inline std::thread::id getId() const noexcept
     {
         return thread.get_id();
-    }    
-    
+    }
+
 private:
     std::thread thread;
     std::atomic<bool> acceptMessages { true };
@@ -131,6 +131,29 @@ private:
     std::mutex messageMutex;
 };
 
+class MainThread : public Thread
+{
+public:
+    MainThread()
+        : Thread(Thread::UninitializedTag{})
+        , threadId(std::this_thread::get_id())
+    {
+    }
+    
+    void run()
+    {
+        runLoop();
+    }
+    
+protected:
+    inline std::thread::id getId() const noexcept override
+    {
+        return threadId;
+    }
+private:
+    std::thread::id threadId;
+};
+    
 }
 
 #endif /* Thread_hpp */

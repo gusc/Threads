@@ -23,7 +23,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		CD14DA88256A68F7004686E5 /* MainThread.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = MainThread.hpp; sourceTree = "<group>"; };
 		CD262BC025711B4E00817645 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		CD89E9DC2569622E005A021E /* ThreadSafeSignals */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ThreadSafeSignals; sourceTree = BUILT_PRODUCTS_DIR; };
 		CD89E9DF2569622E005A021E /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
@@ -65,7 +64,6 @@
 				CD89E9DF2569622E005A021E /* main.cpp */,
 				CD89E9E72569636B005A021E /* Signal.hpp */,
 				CD89E9EA2569649D005A021E /* Thread.hpp */,
-				CD14DA88256A68F7004686E5 /* MainThread.hpp */,
 			);
 			path = ThreadSafeSignals;
 			sourceTree = "<group>";
