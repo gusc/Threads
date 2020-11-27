@@ -101,6 +101,10 @@ protected:
             {
                 next->call();
             }
+            else
+            {
+                std::this_thread::yield();
+            }
         }
         acceptMessages = false;
         {
