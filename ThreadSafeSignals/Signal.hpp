@@ -34,7 +34,15 @@ public:
     template<typename... TArgOther>
     bool operator==(const Slot<TArgOther...>& other)
     {
-        return getFnAddress(callback) == getFnAddress(other.callback);
+        typedef void(cbType)(TArg...);
+        typedef void(otherType)(TArgOther...);
+        cbType* const* cbPtr = callback.template target<cbType*>();
+        otherType* const* otherPtr = other.callback.template target<otherType*>();
+        if (cbPtr && otherPtr)
+        {
+            return *cbPtr == *otherPtr;
+        }
+        return false;
     }
     
     void call(const TArg&... args) const
@@ -96,7 +104,27 @@ public:
     template<typename... TArgOther>
     bool operator==(const Slot<TArgOther...>& other)
     {
-        return getFnAddress(callback) == getFnAddress(other.callback);
+        typedef void(cbType)(void);
+        typedef void(otherType)(TArgOther...);
+        cbType** cbPtr = callback.template target<cbType*>();
+        otherType** otherPtr = other.callback.template target<otherType*>();
+        if (cbPtr && otherPtr)
+        {
+            return *cbPtr == *otherPtr;
+        }
+        return false;
+    }
+    template<>
+    bool operator==(const Slot<void>& other)
+    {
+        typedef void(cbType)(void);
+        cbType* const* cbPtr = callback.template target<cbType*>();
+        cbType* const* otherPtr = other.callback.template target<cbType*>();
+        if (cbPtr && otherPtr)
+        {
+            return *cbPtr == *otherPtr;
+        }
+        return false;
     }
     
     void call() const
@@ -114,14 +142,6 @@ public:
 private:
     Thread* hostThread;
     std::function<void(void)> callback;
-    
-    template<typename T, typename... U>
-    size_t getFnAddress(std::function<T(U...)> f)
-    {
-        typedef T(fnType)(U...);
-        fnType ** fnPointer = f.template target<fnType*>();
-        return (size_t) *fnPointer;
-    }
 };
 
 template<typename ...TArg>
@@ -141,9 +161,15 @@ public:
     }
     
     template<typename TClass>
+    inline bool connect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
+    {
+        return connect(Slot<TArg...>{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+    }
+
+    template<typename TClass>
     inline bool connect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
     {
-        return connect(Slot<TArg...>{thread, [thread, callback](TArg... args){(thread->*callback)(args...);}});
+        return connect(Slot<TArg...>{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
     }
     
     inline bool disconnect(Thread* thread, const std::function<void(TArg...)>& callback) noexcept
@@ -152,9 +178,15 @@ public:
     }
     
     template<typename TClass>
+    inline bool disconnect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
+    {
+        return disconnect(Slot<TArg...>{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+    }
+
+    template<typename TClass>
     inline bool disconnect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
     {
-        return disconnect(Slot<TArg...>{thread, [thread, callback](TArg... args){(thread->*callback)(args...);}});
+        return disconnect(Slot<TArg...>{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
     }
     
     inline void emit(const TArg&... data) noexcept

@@ -105,7 +105,7 @@ void runSignalTests()
     
     gusc::Threads::Signal<void> sigSimple;
     gusc::Threads::Signal<int, bool> sigArgs;
-    gusc::Threads::Signal<const Object&> sigObject;
+    gusc::Threads::Signal<Object> sigObject;
     
     // Connect signals on the main thread
     sigSimple.connect(&mt, &simpleFunction);
