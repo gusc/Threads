@@ -2,7 +2,7 @@
 
 This is a C++17 library that provides threads with message queues and signal mechanism with full control in which thread the signal's listener will be executed.
 
-# Thread with a message queue
+## Thread with a message queue
 
 Library provides an `std::thread` wrapper with an internal run-loop and a message queue. Whenever a message object get's posted on the queue it's `operator()` method is executed in the thread.
 
@@ -12,6 +12,7 @@ Example:
 
 ```c++
 Thread th;
+
 th.send([](){
     auto id = std::this_thread::get_id();
     std::cout << "Thread ID: " << id << std::endl;
@@ -21,7 +22,27 @@ auto id = std::this_thread::get_id();
 std::cout << "Thread ID: " << id << std::endl;
 ```
 
-# Signals and slots
+This will make the lambda run on thread `th`.
+
+Additionally library provides a MainThread class to execute run-loop on current thread.
+
+Example:
+
+```c++
+MainThread mt;
+
+mt.send([](){
+    auto id = std::this_thread::get_id();
+    std::cout << "Thread ID: " << id << std::endl;
+});
+
+// Start a run-loop
+mt.run();
+```
+
+This will run a run-loop in current thread until you call `mt.quit()`.
+
+## Signals and slots
 
 Library provides a Qt-style signal-slot functionality, but with only standard C++ and the thread message queue.
 
