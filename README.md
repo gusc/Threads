@@ -11,13 +11,14 @@ This gives you options to post callback objects to be executed in different thre
 Example:
 
 ```c++
-
 Thread th;
 th.send([](){
     auto id = std::this_thread::get_id();
-    std::cout << "Thread message - lambda, thread ID: " << id << std::endl;
+    std::cout << "Thread ID: " << id << std::endl;
 });
 
+auto id = std::this_thread::get_id();
+std::cout << "Thread ID: " << id << std::endl;
 ```
 
 # Signals and slots

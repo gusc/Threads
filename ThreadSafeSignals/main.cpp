@@ -58,14 +58,23 @@ int main(int argc, const char * argv[]) {
     
     // Test threads
     
+    // auto lambda can't instantiate the internal templates so we don't do that ... yet
+        
     mt.send([](){
         auto id = std::this_thread::get_id();
-        std::cout << "Thread message - lambda, thread ID: " << id << std::endl;
+        std::cout << "Thread ID: " << id << std::endl;
     });
-    mt.send(Callable{});
+    t1.send([](){
+        auto id = std::this_thread::get_id();
+        std::cout << "Thread ID: " << id << std::endl;
+    });
     
     const Callable cb;
+    mt.send(cb);
     t1.send(cb);
+    
+    mt.send(Callable{});
+    t1.send(Callable{});
         
     // Test signals
     
