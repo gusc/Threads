@@ -17,40 +17,6 @@ namespace gusc::Threads
 {
 
 template<typename... TArg>
-class SignalMessage : public Message
-{
-public:
-    SignalMessage(const std::function<void(TArg...)>& initCallback, TArg... initData)
-        : callback(initCallback)
-        , data(initData...)
-    {}
-    
-    void call() override
-    {
-        std::apply(callback, data);
-    }
-private:
-    std::function<void(TArg...)> callback;
-    std::tuple<TArg...> data;
-};
-
-template<>
-class SignalMessage<void> : public Message
-{
-public:
-    SignalMessage(const std::function<void(void)>& initCallback)
-        : callback(initCallback)
-    {}
-    
-    void call() override
-    {
-        callback();
-    }
-private:
-    std::function<void(void)> callback;
-};
-
-template<typename... TArg>
 class Slot
 {
 public:
@@ -79,11 +45,27 @@ public:
         }
         else
         {
-            hostThread->sendMessage(std::make_unique<SignalMessage<TArg...>>(callback, args...));
+            hostThread->send(SignalMessage{callback, args...});
         }
     }
     
 private:
+    class SignalMessage
+    {
+    public:
+        SignalMessage(const std::function<void(TArg...)>& initCallback, const TArg&... initData)
+            : callback(initCallback)
+            , data(initData...)
+        {}
+        void operator()()
+        {
+            std::apply(callback, data);
+        }
+    private:
+        std::function<void(TArg...)> callback;
+        std::tuple<TArg...> data;
+    };
+    
     Thread* hostThread;
     std::function<void(TArg...)> callback;
     
@@ -125,7 +107,7 @@ public:
         }
         else
         {
-            hostThread->sendMessage(std::make_unique<SignalMessage<void>>(callback));
+            hostThread->send(callback);
         }
     }
     
@@ -175,7 +157,7 @@ public:
         return disconnect(Slot<TArg...>{thread, [thread, callback](TArg... args){(thread->*callback)(args...);}});
     }
     
-    inline void emit(TArg... data) noexcept
+    inline void emit(const TArg&... data) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
         for (const auto& l : slots)

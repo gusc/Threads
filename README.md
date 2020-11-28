@@ -4,7 +4,7 @@ This is a C++17 library that provides threads with message queues and signal mec
 
 # Thread with a message queue
 
-Library provides an `std::thread` wrapper with an internal run-loop and a message queue. Whenever a message get's posted on the queue it's `call()` method is executed in the thread.
+Library provides an `std::thread` wrapper with an internal run-loop and a message queue. Whenever a message object get's posted on the queue it's `operator()` method is executed in the thread.
 
 This gives you options to post callback objects to be executed in different threads.
 
@@ -12,20 +12,11 @@ Example:
 
 ```c++
 
-class MyMessage final : public gusc::Threads::Message
-{
-public:
-    MyThread() : Message() {}
-    
-    public call() override
-    {
-        auto id = std::this_thread::get_id();
-        std::cout << "I've been called from thread ID: " << id << "\n";
-    }
-};
-
 Thread th;
-th.sendMessage(std::make_unique<MyMessage>());
+th.send([](){
+    auto id = std::this_thread::get_id();
+    std::cout << "Thread message - lambda, thread ID: " << id << std::endl;
+});
 
 ```
 

@@ -38,6 +38,15 @@ private:
     
 };
 
+struct Callable
+{
+    void operator()()
+    {
+        auto id = std::this_thread::get_id();
+        std::cout << "Callable struct thread ID: " << id << std::endl;
+    }
+};
+
 int main(int argc, const char * argv[]) {
     
     gusc::Threads::MainThread mt;
@@ -46,6 +55,19 @@ int main(int argc, const char * argv[]) {
     
     auto id = std::this_thread::get_id();
     std::cout << "Main thread ID: " << id << std::endl;
+    
+    // Test threads
+    
+    mt.send([](){
+        auto id = std::this_thread::get_id();
+        std::cout << "Thread message - lambda, thread ID: " << id << std::endl;
+    });
+    mt.send(Callable{});
+    
+    const Callable cb;
+    t1.send(cb);
+        
+    // Test signals
     
     gusc::Threads::Signal<void> simpleSignal;
     simpleSignal.connect(&t1, &foo);
