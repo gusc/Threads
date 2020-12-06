@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.19)
 project(Threads VERSION 1.0.0 LANGUAGES CXX)
 
 option(Threads_BuildTests "Build the unit tests when BUILD_TESTING is enabled." ON)
