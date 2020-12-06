@@ -12,7 +12,7 @@
 
 namespace
 {
-static Logger log;
+static Logger tlog;
 }
 
 class CustomThread : public gusc::Threads::Thread
@@ -21,7 +21,7 @@ class CustomThread : public gusc::Threads::Thread
 
 void callableFunction()
 {
-    log << "Callable function thread ID: " + tidToStr(std::this_thread::get_id());
+    tlog << "Callable function thread ID: " + tidToStr(std::this_thread::get_id());
 }
 
 class MethodWrapper
@@ -29,7 +29,7 @@ class MethodWrapper
 public:
     void callableMethod()
     {
-        log << "Callable method thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog << "Callable method thread ID: " + tidToStr(std::this_thread::get_id());
     }
 };
 
@@ -37,19 +37,19 @@ struct CallableStruct
 {
     void operator()() const
     {
-        log << "Callable struct thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog << "Callable struct thread ID: " + tidToStr(std::this_thread::get_id());
     }
 };
 
 void runThreadTests()
 {
-    log << "Thread Tests";
+    tlog << "Thread Tests";
         
     gusc::Threads::MainThread mt;
     gusc::Threads::Thread t1;
     CustomThread t2;
     
-    log << "Main thread ID: " + tidToStr(std::this_thread::get_id());
+    tlog << "Main thread ID: " + tidToStr(std::this_thread::get_id());
 
     // Test function
     callableFunction();
@@ -78,19 +78,19 @@ void runThreadTests()
     
     // Test lambda
     auto lambda = [](){
-        log << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
     };
     lambda();
     // can't instantiate the internal templates so we don't do lambdas yet
     // mt.send(lambda);
     mt.send([](){
-        log << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
     t1.send([](){
-        log << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
     t2.send([](){
-        log << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
     
     // Signal main thread to quit

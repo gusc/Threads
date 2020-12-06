@@ -15,7 +15,7 @@
 
 namespace
 {
-static Logger log;
+static Logger slog;
 }
 
 class Object
@@ -46,17 +46,17 @@ private:
 
 void simpleFunction()
 {
-    log << "Simple function thread ID: " + tidToStr(std::this_thread::get_id());
+    slog << "Simple function thread ID: " + tidToStr(std::this_thread::get_id());
 }
 
 void argumentFunction(int a , bool b)
 {
-    log << "Argument function thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
+    slog << "Argument function thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
 }
 
 void objectFunction(const Object& obj)
 {
-    log << "Object function thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + obj.getVal();
+    slog << "Object function thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + obj.getVal();
 }
 
 class MethodWrapper
@@ -64,15 +64,15 @@ class MethodWrapper
 public:
     void listenSimple()
     {
-        log << "Simple method thread ID: " + tidToStr(std::this_thread::get_id());
+        slog << "Simple method thread ID: " + tidToStr(std::this_thread::get_id());
     }
     void listenArgs(int a , bool b)
     {
-        log << "Argument method thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
+        slog << "Argument method thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
     }
     void listenObject(const Object& obj)
     {
-        log << "Object method thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + obj.getVal();
+        slog << "Object method thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + obj.getVal();
     }
 };
 
@@ -81,21 +81,21 @@ class CustomThread : public gusc::Threads::Thread
 public:
     void listenSimple()
     {
-        log << "Custom thread - Simple method thread ID: " + tidToStr(std::this_thread::get_id());
+        slog << "Custom thread - Simple method thread ID: " + tidToStr(std::this_thread::get_id());
     }
     void listenArgs(int a , bool b)
     {
-        log << "Custom thread - Argument method thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
+        slog << "Custom thread - Argument method thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
     }
     void listenObject(const Object& obj)
     {
-        log << "Custom thread - Object method thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + obj.getVal();
+        slog << "Custom thread - Object method thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + obj.getVal();
     }
 };
 
 void runSignalTests()
 {
-    log << "Signal Tests";
+    slog << "Signal Tests";
     
     gusc::Threads::MainThread mt;
     gusc::Threads::Thread t1;
@@ -111,33 +111,33 @@ void runSignalTests()
     sigSimple.connect(&mt, &simpleFunction);
     sigSimple.connect(&mt, std::bind(&MethodWrapper::listenSimple, &mw));
     sigSimple.connect(&mt, [](){
-        log << "Simple lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        slog << "Simple lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
     sigArgs.connect(&mt, &argumentFunction);
     sigArgs.connect(&mt, std::bind(&MethodWrapper::listenArgs, &mw, std::placeholders::_1, std::placeholders::_2));
     sigArgs.connect(&mt, [](int a, bool b){
-        log << "Argument lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
+        slog << "Argument lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
     });
     sigObject.connect(&mt, &objectFunction);
     sigObject.connect(&mt, std::bind(&MethodWrapper::listenObject, &mw, std::placeholders::_1));
     sigObject.connect(&mt, [](const Object& o){
-        log << "Object lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + o.getVal();
+        slog << "Object lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + o.getVal();
     });
     // Connect signals on other threads
     sigSimple.connect(&t1, &simpleFunction);
     sigSimple.connect(&t1, std::bind(&MethodWrapper::listenSimple, &mw));
     sigSimple.connect(&t1, [](){
-        log << "Simple lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        slog << "Simple lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
     sigArgs.connect(&t1, &argumentFunction);
     sigArgs.connect(&t1, std::bind(&MethodWrapper::listenArgs, &mw, std::placeholders::_1, std::placeholders::_2));
     sigArgs.connect(&t1, [](int a, bool b){
-        log << "Argument lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
+        slog << "Argument lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
     });
     sigObject.connect(&t1, &objectFunction);
     sigObject.connect(&t1, std::bind(&MethodWrapper::listenObject, &mw, std::placeholders::_1));
     sigObject.connect(&t1, [](const Object& o){
-        log << "Object lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + o.getVal();
+        slog << "Object lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + o.getVal();
     });
     // Custom threads can be connected directly without binding
     sigSimple.connect(&ct, &CustomThread::listenSimple);
