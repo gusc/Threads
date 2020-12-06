@@ -21,17 +21,44 @@ namespace gusc::Threads
 class Thread
 {
 public:
-    Thread()
-        : thread(std::make_unique<std::thread>(&Thread::runLoop, this))
-    {}
+    Thread() = default;
     Thread(const Thread&) = delete;
     Thread& operator=(const Thread&) = delete;
     Thread(Thread&&) = delete;
     Thread& operator=(Thread&&) = delete;
     ~Thread()
     {
-        quit();
+        setIsRunning(false);
         join();
+    }
+    
+    virtual void start()
+    {
+        if (!getIsRunning())
+        {
+            if (thread && thread->joinable())
+            {
+                thread->join();
+            }
+            setIsRunning(true);
+            thread = std::make_unique<std::thread>(&Thread::runLoop, this);
+        }
+        else
+        {
+            throw std::runtime_error("Thread already started");
+        }
+    }
+    
+    virtual void stop()
+    {
+        if (thread)
+        {
+            setIsRunning(false);
+        }
+        else
+        {
+            throw std::runtime_error("Thread has not been started");
+        }
     }
     
     void join()
@@ -42,29 +69,25 @@ public:
         }
     }
     
-    void quit()
-    {
-        continueRunning = false;
-    }
-    
     template<typename TMsg>
     void send(const TMsg& newMessage)
     {
-        if (acceptMessages)
+        if (getIsRunning())
         {
             std::lock_guard<std::mutex> lock(messageMutex);
             messageQueue.emplace(new TMessage<TMsg>(newMessage));
+        }
+        else
+        {
+            throw std::runtime_error("Thread is not excepting any messages, you have to start it first");
         }
     }
     
     template<typename TMsg>
     void send(TMsg&& newMessage)
     {
-        if (acceptMessages)
-        {
-            std::lock_guard<std::mutex> lock(messageMutex);
-            messageQueue.emplace(new TMessage<TMsg>(std::forward<TMsg>(newMessage)));
-        }
+        std::lock_guard<std::mutex> lock(messageMutex);
+        messageQueue.emplace(new TMessage<TMsg>(std::forward<TMsg>(newMessage)));
     }
     
     inline bool operator==(const Thread& other) const noexcept
@@ -88,7 +111,7 @@ public:
 protected:
     void runLoop()
     {
-        while (continueRunning)
+        while (getIsRunning())
         {
             std::unique_ptr<Message> next;
             {
@@ -108,21 +131,41 @@ protected:
                 std::this_thread::yield();
             }
         }
-        acceptMessages = false;
+        runLeftovers();
+    }
+    
+    void runLeftovers()
+    {
+        // Process any leftover messages
+        std::lock_guard<std::mutex> lock(messageMutex);
+        while (messageQueue.size())
         {
-            // Process any leftover messages
-            std::lock_guard<std::mutex> lock(messageMutex);
-            while (messageQueue.size())
-            {
-                messageQueue.front()->call();
-                messageQueue.pop();
-            }
+            messageQueue.front()->call();
+            messageQueue.pop();
         }
     }
     
-    virtual inline std::thread::id getId() const noexcept
+    inline std::thread::id getId() const noexcept
     {
-        return thread->get_id();
+        if (thread)
+        {
+            return thread->get_id();
+        }
+        else
+        {
+            // We haven't started a thread yet, so we're the same thread
+            return std::this_thread::get_id();
+        }
+    }
+    
+    inline bool getIsRunning() const noexcept
+    {
+        return isRunning;
+    }
+
+    inline void setIsRunning(bool newIsRunning) noexcept
+    {
+        isRunning = newIsRunning;
     }
 
 private:
@@ -150,32 +193,34 @@ private:
     };
     
     std::unique_ptr<std::thread> thread;
-    std::atomic<bool> acceptMessages { true };
-    std::atomic<bool> continueRunning { true };
+    std::atomic<bool> isRunning { false };
     std::queue<std::unique_ptr<Message>> messageQueue;
     std::mutex messageMutex;
 };
 
-class MainThread : public Thread
+class ThisThread : public Thread
 {
 public:
-    MainThread()
-        : threadId(std::this_thread::get_id())
+    ThisThread()
     {
+        // ThisThread is already running
+        setIsRunning(true);
+    }
+    
+    void start() override
+    {
+        throw std::runtime_error("ThisThread is already started");
+    }
+
+    void stop() override
+    {
+        setIsRunning(false);
     }
     
     void run()
     {
         runLoop();
     }
-    
-protected:
-    inline std::thread::id getId() const noexcept override
-    {
-        return threadId;
-    }
-private:
-    std::thread::id threadId;
 };
     
 }

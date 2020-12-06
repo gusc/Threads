@@ -45,7 +45,7 @@ void runThreadTests()
 {
     tlog << "Thread Tests";
         
-    gusc::Threads::MainThread mt;
+    gusc::Threads::ThisThread mt;
     gusc::Threads::Thread t1;
     CustomThread t2;
     
@@ -94,7 +94,7 @@ void runThreadTests()
     });
     
     // Signal main thread to quit
-    mt.quit();
+    mt.stop();
     // Run main runloop
     mt.run();
 }

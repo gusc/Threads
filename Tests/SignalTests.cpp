@@ -97,7 +97,7 @@ void runSignalTests()
 {
     slog << "Signal Tests";
     
-    gusc::Threads::MainThread mt;
+    gusc::Threads::ThisThread mt;
     gusc::Threads::Thread t1;
     
     MethodWrapper mw;
@@ -157,7 +157,7 @@ void runSignalTests()
         sigObject.emit(o);
     });
     
-    mt.quit();
+    mt.stop();
     mt.run();
     
     // Disconnect

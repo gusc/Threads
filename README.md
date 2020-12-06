@@ -5,7 +5,7 @@ If you wish to:
 * run a function on a specific thread 
 * run callbacks that each are assigned to a different thread with thread afinity check
 
-This is the library for you!
+Then this is the library for you!
 
 This is a C++17 library that provides threads with message queues and signal mechanism with full control in which thread the signal's listener will be executed.
 
@@ -37,26 +37,38 @@ std::cout << "Main thread ID: " << id << std::endl;
 
 This will make the each lambda run on a different thread.
 
-Additionally library provides a `MainThread` class to execute run-loop on current thread. This is intended to be used only on a main thread, but if you are running in a plug-in environment and wish to create your own run-loop, this might also help.
+Additionally library provides a `ThisThread` class to execute run-loop on current thread. This is intended to be used only on a main thread or any other thread that was not started by `Thread` class.
 
 Example:
 
 ```c++
-gusc::Threads::MainThread mt;
+gusc::Threads::ThisThread mt;
 
 mt.send([&mt](){
     auto id = std::this_thread::get_id();
     std::cout << "This is a worker on thread ID: " << id << std::endl;
     
     // You can quit the main thread run-loop from anywhere
-    mt.quit();
+    mt.stop();
 });
 
 // Start the run-loop
 mt.run();
 ```
 
-This will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.quit()` call.
+This will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.stop()` call.
+
+`Thread` methods:
+
+* `void start()` - start running the thread (also automatically start run-loop)
+* `void stop()` - signal the thread to stop - this will make the thread stop accepting new messages, but it will still continue processing messages in the queue
+* `void join()` - wait for the thread to finish
+
+`Thread` class automatically joins on destruction.
+
+`ThisThread` extends from `Thread` and contains one additional method:
+
+* `void run()` - manually start the run-loop - this will efectively block current thread until someone calls `stop()` of the same `ThisThread` object.
 
 ## Signals and slots
 
@@ -107,7 +119,7 @@ int main(int argc, const char * argv[]) {
     auto id = std::this_thread::get_id();
     std::cout << "Main thread ID: " << id << "\n";
 
-    gusc::Threads::MainThread mainThread;
+    gusc::Threads::ThisThread mainThread;
     gusc::Threads::Thread workerThread;
     
     MyObject my;
