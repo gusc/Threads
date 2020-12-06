@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
-project(ThreadSafeSignals VERSION 1.0.0 LANGUAGES CXX)
+project(Threads VERSION 1.0.0 LANGUAGES CXX)
 
-option(ThreadSafeSignals_BuildTests "Build the unit tests when BUILD_TESTING is enabled." ON)
+option(Threads_BuildTests "Build the unit tests when BUILD_TESTING is enabled." ON)
 
 add_library(${PROJECT_NAME} INTERFACE)
 target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
@@ -11,6 +11,6 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 )
 
 include(CTest)
-if(BUILD_TESTING AND ThreadSafeSignals_BuildTests)
+if(BUILD_TESTING AND Threads_BuildTests)
     add_subdirectory(Tests)
 endif()

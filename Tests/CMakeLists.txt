@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(ThreadSafeSignalsTests VERSION 1.0.0 LANGUAGES CXX)
+project(ThreadsTests VERSION 1.0.0 LANGUAGES CXX)
 
 set(SOURCES
 	"main.cpp"
