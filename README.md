@@ -21,10 +21,6 @@ Example:
 gusc::Threads::Thread th1;
 gusc::Threads::Thread th2;
 
-// You have to start threads first for them to receive messages
-th1.start();
-th2.start();
-
 th1.send([](){
     auto id = std::this_thread::get_id();
     std::cout << "This is a worker on thread ID: " << id << std::endl;
@@ -38,6 +34,9 @@ th2.send([](){
 auto id = std::this_thread::get_id();
 std::cout << "Main thread ID: " << id << std::endl;
 
+// You have to start threads to process all the messages
+th1.start();
+th2.start();
 // Both threads will be joined up on destruction
 ```
 
@@ -59,7 +58,7 @@ mt.send([&mt](){
 });
 
 // Start the run-loop
-mt.run();
+mt.start();
 ```
 
 This will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.stop()` call.
