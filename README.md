@@ -125,8 +125,6 @@ int main(int argc, const char * argv[]) {
     gusc::Threads::ThisThread mainThread;
     gusc::Threads::Thread workerThread;
     
-    workerThread.start();
-    
     MyObject my;
     my.sigSimple.connect(&workerThread, [](){
         std::cout << "lambda thread ID: " << id << "\n";
@@ -137,9 +135,12 @@ int main(int argc, const char * argv[]) {
     
     MyObject2 myThread(my);
     
-    my.someMethod();
+    my.someMethod(); // Emits the signals
     
-    mainThread.run(); // Runs forever
+    // We need to start our thread so that their signal listeners are executed
+    workerThread.start();
+    myThread.start(); 
+    mainThread.start(); // Blocks indefinitely
     return 0;
 }
 
