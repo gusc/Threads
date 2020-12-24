@@ -11,9 +11,15 @@
 
 #include <thread>
 #include <atomic>
+#include <chrono>
 #include <queue>
 #include <mutex>
 #include <utility>
+
+namespace
+{
+constexpr const std::size_t MaxSpinCycles { 1000 };
+}
 
 namespace gusc::Threads
 {
@@ -123,11 +129,20 @@ protected:
             }
             if (next)
             {
+                missCounter = 0;
                 next->call();
             }
             else
             {
-                std::this_thread::yield();
+                if (missCounter < MaxSpinCycles)
+                {
+                    ++missCounter;
+                    std::this_thread::yield();
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::nanoseconds(1));
+                }
             }
         }
         runLeftovers();
@@ -205,10 +220,11 @@ private:
         TCallable callableObject;
     };
     
-    std::unique_ptr<std::thread> thread;
+    std::size_t missCounter { 0 };
     std::atomic<bool> isRunning { false };
     std::atomic<bool> isAcceptingMessages { true };
     std::queue<std::unique_ptr<Message>> messageQueue;
+    std::unique_ptr<std::thread> thread;
     std::mutex messageMutex;
 };
 
