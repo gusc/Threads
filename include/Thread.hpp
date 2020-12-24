@@ -84,15 +84,22 @@ public:
         }
         else
         {
-            throw std::runtime_error("Thread is not excepting any messages, you have to start it first");
+            throw std::runtime_error("Thread is not excepting any messages, the thread has been signaled for stopping");
         }
     }
     
     template<typename TCallable>
     void send(TCallable&& newMessage)
     {
-        std::lock_guard<std::mutex> lock(messageMutex);
-        messageQueue.emplace(new CallableMessage<TCallable>(std::forward<TCallable>(newMessage)));
+        if (getIsAcceptingMessages())
+        {
+            std::lock_guard<std::mutex> lock(messageMutex);
+            messageQueue.emplace(new CallableMessage<TCallable>(std::forward<TCallable>(newMessage)));
+        }
+        else
+        {
+            throw std::runtime_error("Thread is not excepting any messages, the thread has been signaled for stopping");
+        }
     }
     
     inline bool operator==(const Thread& other) const noexcept
