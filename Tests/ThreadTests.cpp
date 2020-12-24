@@ -93,8 +93,10 @@ void runThreadTests()
         tlog << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
     
-    // Signal main thread to quit
+    // Signal main thread to quit (this effectivelly stops processing all the messages)
     mt.stop();
-    // Run main runloop
-    mt.run();
+    // Start all threads and main run-loop
+    t1.start();
+    t2.start();
+    mt.start();
 }

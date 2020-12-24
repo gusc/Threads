@@ -21,6 +21,10 @@ Example:
 gusc::Threads::Thread th1;
 gusc::Threads::Thread th2;
 
+// You have to start threads first for them to receive messages
+th1.start();
+th2.start();
+
 th1.send([](){
     auto id = std::this_thread::get_id();
     std::cout << "This is a worker on thread ID: " << id << std::endl;
@@ -33,6 +37,8 @@ th2.send([](){
 
 auto id = std::this_thread::get_id();
 std::cout << "Main thread ID: " << id << std::endl;
+
+// Both threads will be joined up on destruction
 ```
 
 This will make the each lambda run on a different thread.
@@ -66,9 +72,7 @@ This will run a run-loop in current thread and when the lambda is executed it wi
 
 `Thread` class automatically joins on destruction.
 
-`ThisThread` extends from `Thread` and contains one additional method:
-
-* `void run()` - manually start the run-loop - this will efectively block current thread until someone calls `stop()` of the same `ThisThread` object.
+`ThisThread` extends from `Thread` and starts run loop when `start()` is called effectivelly blocking current thread until someone calls `stop()` (which can be done either through a message or before calling `start()`).
 
 ## Signals and slots
 
@@ -122,6 +126,8 @@ int main(int argc, const char * argv[]) {
     gusc::Threads::ThisThread mainThread;
     gusc::Threads::Thread workerThread;
     
+    workerThread.start();
+    
     MyObject my;
     my.sigSimple.connect(&workerThread, [](){
         std::cout << "lambda thread ID: " << id << "\n";
@@ -134,7 +140,7 @@ int main(int argc, const char * argv[]) {
     
     my.someMethod();
     
-    mainThread.run();
+    mainThread.run(); // Runs forever
     return 0;
 }
 

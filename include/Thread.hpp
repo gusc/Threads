@@ -18,6 +18,7 @@
 namespace gusc::Threads
 {
 
+/// @brief Class representing a new thread
 class Thread
 {
 public:
@@ -28,6 +29,7 @@ public:
     Thread& operator=(Thread&&) = delete;
     ~Thread()
     {
+        setIsAcceptingMessages(false);
         setIsRunning(false);
         join();
     }
@@ -36,10 +38,6 @@ public:
     {
         if (!getIsRunning())
         {
-            if (thread && thread->joinable())
-            {
-                thread->join();
-            }
             setIsRunning(true);
             thread = std::make_unique<std::thread>(&Thread::runLoop, this);
         }
@@ -53,6 +51,7 @@ public:
     {
         if (thread)
         {
+            setIsAcceptingMessages(false);
             setIsRunning(false);
         }
         else
@@ -69,13 +68,13 @@ public:
         }
     }
     
-    template<typename TMsg>
-    void send(const TMsg& newMessage)
+    template<typename TCallable>
+    void send(const TCallable& newMessage)
     {
-        if (getIsRunning())
+        if (getIsAcceptingMessages())
         {
             std::lock_guard<std::mutex> lock(messageMutex);
-            messageQueue.emplace(new TMessage<TMsg>(newMessage));
+            messageQueue.emplace(new CallableMessage<TCallable>(newMessage));
         }
         else
         {
@@ -83,11 +82,11 @@ public:
         }
     }
     
-    template<typename TMsg>
-    void send(TMsg&& newMessage)
+    template<typename TCallable>
+    void send(TCallable&& newMessage)
     {
         std::lock_guard<std::mutex> lock(messageMutex);
-        messageQueue.emplace(new TMessage<TMsg>(std::forward<TMsg>(newMessage)));
+        messageQueue.emplace(new CallableMessage<TCallable>(std::forward<TCallable>(newMessage)));
     }
     
     inline bool operator==(const Thread& other) const noexcept
@@ -167,37 +166,53 @@ protected:
     {
         isRunning = newIsRunning;
     }
+    
+    inline bool getIsAcceptingMessages() const noexcept
+    {
+        return isAcceptingMessages;
+    }
+
+    inline void setIsAcceptingMessages(bool newIsAcceptingMessages) noexcept
+    {
+        isAcceptingMessages = newIsAcceptingMessages;
+    }
 
 private:
+    
+    /// @brief base class for thread message
     class Message
     {
     public:
         virtual void call() {}
     };
-    template<typename TMsg>
-    class TMessage : public Message
+    
+    /// @brief templated message to wrap a callable object
+    template<typename TCallable>
+    class CallableMessage : public Message
     {
     public:
-        TMessage(const TMsg& initMessageObject)
-            : messageObject(initMessageObject)
+        CallableMessage(const TCallable& initCallableObject)
+            : callableObject(initCallableObject)
         {}
-        TMessage(TMsg&& initMessageObject)
-            : messageObject(std::forward<TMsg>(initMessageObject))
+        CallableMessage(TCallable&& initCallableObject)
+            : callableObject(std::forward<TCallable>(initCallableObject))
         {}
         void call() override
         {
-            messageObject();
+            callableObject();
         }
     private:
-        TMsg messageObject;
+        TCallable callableObject;
     };
     
     std::unique_ptr<std::thread> thread;
     std::atomic<bool> isRunning { false };
+    std::atomic<bool> isAcceptingMessages { true };
     std::queue<std::unique_ptr<Message>> messageQueue;
     std::mutex messageMutex;
 };
 
+/// @brief Class representing a currently executing thread
 class ThisThread : public Thread
 {
 public:
@@ -209,17 +224,13 @@ public:
     
     void start() override
     {
-        throw std::runtime_error("ThisThread is already started");
+        runLoop();
     }
 
     void stop() override
     {
+        setIsAcceptingMessages(false);
         setIsRunning(false);
-    }
-    
-    void run()
-    {
-        runLoop();
     }
 };
     

@@ -157,8 +157,9 @@ void runSignalTests()
         sigObject.emit(o);
     });
     
+    t1.start();
     mt.stop();
-    mt.run();
+    mt.start();
     
     // Disconnect
     sigSimple.disconnect(&mt, &simpleFunction);
