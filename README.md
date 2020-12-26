@@ -3,7 +3,8 @@
 If you wish to:
 
 * run a function on a specific thread 
-* run callbacks that each are assigned to a different thread with thread afinity check
+* run callbacks that each are assigned to a different thread with thread affinity check
+* have greater control over which code accesses which data in which thread
 
 Then this is the library for you!
 
@@ -91,7 +92,7 @@ It's a templated class who's method signature depend on what arguments the signa
 
 * `bool connect(Thread*, const std::function<void(TArg...)>&)` - connect a listener to the signal (returns false if already connected)
 * `bool disconnect(Thread*, const std::function<void(TArg...)>&)` - disconnect a listener from the signal (returns false if not connected)
-* `void emit(const TArg&...)` - emit the signal with data - this will call all the connected listeners on their respecitve afinity threads
+* `void emit(const TArg&...)` - emit the signal with data - this will call all the connected listeners on their respecitve affinity threads
 
 ### Examples
 

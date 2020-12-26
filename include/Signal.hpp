@@ -20,6 +20,7 @@ namespace gusc::Threads
 template<typename ...TArg>
 class Signal
 {
+    /// @brief internal class representing a single message that wraps the signal data and the listener and is dispatched to a listener's thread
     class SignalMessage
     {
     public:
@@ -36,6 +37,7 @@ class Signal
         std::tuple<TArg...> data;
     };
     
+    /// @brief internal class representing a signal connection slot (listener and it's affinity thread)
     class Slot
     {
     public:
@@ -50,6 +52,10 @@ class Signal
             typedef void(cbType)(TArg...);
             cbType* const* cbPtr = callback.template target<cbType*>();
             cbType* const* otherPtr = other.callback.template target<cbType*>();
+            if (hostThread != other.hostThread)
+            {
+                return false;
+            }
             if (cbPtr && otherPtr)
             {
                 return *cbPtr == *otherPtr;
@@ -90,40 +96,67 @@ public:
     Signal& operator=(Signal<TArg...>&& other) = delete;
     ~Signal() = default;
     
+    /// @brief connect a listener callback to this signal
+    /// @param thread - listener's thread of affinity
+    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @return false if listener has been already connected
     inline bool connect(Thread* thread, const std::function<void(TArg...)>& callback) noexcept
     {
         return connect({thread, callback});
     }
     
+    /// @brief connect a listener callback to this signal
+    /// @param thread - listener's thread of affinity
+    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @return false if listener has been already connected
     template<typename TClass>
     inline bool connect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
     {
+        // TODO: figure out whether passing lambda to Slot does not break the whole unique connection logic (Slot comparisson)
         return connect(Slot{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
     }
 
+    /// @brief connect a listener callback to this signal
+    /// @param thread - listener's thread of affinity
+    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @return false if listener from has been already connected
     template<typename TClass>
     inline bool connect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
     {
         return connect(Slot{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
     }
     
+    /// @brief disconnect a listener callback from this signal
+    /// @param thread - listener's thread of affinity
+    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @return false if listener was not connected
     inline bool disconnect(Thread* thread, const std::function<void(TArg...)>& callback) noexcept
     {
         return disconnect({thread, callback});
     }
     
+    /// @brief disconnect a listener callback from this signal
+    /// @param thread - listener's thread of affinity
+    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @return false if listener was not connected
     template<typename TClass>
     inline bool disconnect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
     {
         return disconnect(Slot{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
     }
 
+    /// @brief disconnect a listener callback from this signal
+    /// @param thread - listener's thread of affinity
+    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @return false if listener was not connected
     template<typename TClass>
     inline bool disconnect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
     {
         return disconnect(Slot{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
     }
     
+    /// @brief emit the signal to all of it's listeneres
+    /// @param data - signal arguments
     inline void emit(const TArg&... data) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
@@ -161,6 +194,7 @@ private:
     }
 };
 
+/// @brief template specialization for void arguments - unfortunatelly vararg templates can't handle that
 template<>
 class Signal<void>
 {

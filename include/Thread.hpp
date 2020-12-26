@@ -40,6 +40,7 @@ public:
         join();
     }
     
+    /// @brief start the thread and it's run-loop
     virtual void start()
     {
         if (!getIsRunning())
@@ -53,6 +54,8 @@ public:
         }
     }
     
+    /// @brief signal the thread to stop - this also stops receiving messages
+    /// @warning if a message is sent after calling this method an exception will be thrown
     virtual void stop()
     {
         if (thread)
@@ -66,6 +69,7 @@ public:
         }
     }
     
+    /// @brief join the thread and wait unti it's finished
     void join()
     {
         if (thread && thread->joinable())
@@ -74,6 +78,8 @@ public:
         }
     }
     
+    /// @brief send a message that needs to be executed on this thread
+    /// @param newMessage - any callable object that will be executed on this thread
     template<typename TCallable>
     void send(const TCallable& newMessage)
     {
@@ -88,6 +94,8 @@ public:
         }
     }
     
+    /// @brief send a message that needs to be executed on this thread
+    /// @param newMessage - any callable object that will be executed on this thread
     template<typename TCallable>
     void send(TCallable&& newMessage)
     {
@@ -110,7 +118,6 @@ public:
     {
         return !(operator==(other));
     }
-    
     inline bool operator==(const std::thread::id& other) const noexcept
     {
         return getId() == other;
@@ -245,11 +252,15 @@ public:
         setIsRunning(true);
     }
     
+    /// @brief start the thread and it's run-loop
+    /// @warning calling this method will efectivelly block current thread
     void start() override
     {
         runLoop();
     }
 
+    /// @brief signal the thread to stop - this also stops receiving messages
+    /// @warning if a message is sent after calling this method an exception will be thrown
     void stop() override
     {
         setIsAcceptingMessages(false);
