@@ -15,7 +15,25 @@ Library provides an `std::thread` wrapper with an internal run-loop and a messag
 
 This gives you options to post worker functions to be executed in different threads.
 
-Example:
+### Thread class
+
+`Thread` methods:
+
+* `void start()` - start running the thread (also automatically start run-loop)
+* `void stop()` - signal the thread to stop - this will make the thread stop accepting new messages, but it will still continue processing messages in the queue
+* `void join()` - wait for the thread to finish
+
+`Thread` class automatically joins on destruction.
+
+### ThisThread class
+
+Additionally library provides a `ThisThread` class to execute run-loop on current thread. This is intended to be used only on a main thread or any other thread that was not started by `Thread` class.
+
+`ThisThread` extends from `Thread` and starts run loop when `start()` is called effectivelly blocking current thread until someone calls `stop()` (which can be done either through a message or before calling `start()`).
+
+### Examples
+
+This will make the each lambda run on a different thread:
 
 ```c++
 gusc::Threads::Thread th1;
@@ -40,11 +58,7 @@ th2.start();
 // Both threads will be joined up on destruction
 ```
 
-This will make the each lambda run on a different thread.
-
-Additionally library provides a `ThisThread` class to execute run-loop on current thread. This is intended to be used only on a main thread or any other thread that was not started by `Thread` class.
-
-Example:
+Example with `ThisThread` - this will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.stop()` call.
 
 ```c++
 gusc::Threads::ThisThread mt;
@@ -61,19 +75,7 @@ mt.send([&mt](){
 mt.start();
 ```
 
-This will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.stop()` call.
-
-`Thread` methods:
-
-* `void start()` - start running the thread (also automatically start run-loop)
-* `void stop()` - signal the thread to stop - this will make the thread stop accepting new messages, but it will still continue processing messages in the queue
-* `void join()` - wait for the thread to finish
-
-`Thread` class automatically joins on destruction.
-
-`ThisThread` extends from `Thread` and starts run loop when `start()` is called effectivelly blocking current thread until someone calls `stop()` (which can be done either through a message or before calling `start()`).
-
-## Signals and slots
+## Signals with listener slots
 
 Library provides a Qt-style signal-slot functionality, but with standard C++ only.
 
@@ -81,7 +83,17 @@ Signals are means to emit data to multiple listeneres at once. All you have to d
 
 If the listener is on the same thread where signal was emited from it's called directly and all the data is passed as `const&`. Data is only copied when signal is emitted to a different thread, then the data is packed together with the callback and placed on that threads message queue for later processing.
 
-Example:
+### Signal class
+
+It's a templated class who's method signature depend on what arguments the signal has.
+
+`Signal` methods:
+
+* `bool connect(Thread*, const std::function<void(TArg...)>&)` - connect a listener to the signal (returns false if already connected)
+* `bool disconnect(Thread*, const std::function<void(TArg...)>&)` - disconnect a listener from the signal (returns false if not connected)
+* `void emit(const TArg&...)` - emit the signal with data - this will call all the connected listeners on their respecitve afinity threads
+
+### Examples
 
 ```c++
 
@@ -97,6 +109,7 @@ public:
         sigArgs.emit(1, 2);
     }
     
+    // Signal definition includes signal argument types
     gusc::Threads::Signal<void> sigSimple;
     gusc::Threads::Signal<int, int> sigArgs;
 };
