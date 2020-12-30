@@ -65,6 +65,10 @@ class Signal
         
         void call(const TArg&... args) const
         {
+            if (!hostThread)
+            {
+                throw std::runtime_error("Host thread is null");
+            }
             if (*hostThread == std::this_thread::get_id())
             {
                 callback(args...);
