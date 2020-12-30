@@ -41,6 +41,15 @@ struct CallableStruct
     }
 };
 
+static const auto globalConstLambda = [](){
+    tlog << "Global const lambda thread ID: " + tidToStr(std::this_thread::get_id());
+};
+
+static auto globalLambda = [](){
+    tlog << "Global lambda thread ID: " + tidToStr(std::this_thread::get_id());
+};
+
+
 void runThreadTests()
 {
     tlog << "Thread Tests";
@@ -76,21 +85,36 @@ void runThreadTests()
     t1.send(CallableStruct{});
     t2.send(CallableStruct{});
     
-    // Test lambda
-    auto lambda = [](){
-        tlog << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
+    // Test local lambda
+    auto localLambda = [](){
+        tlog << "Local lambda thread ID: " + tidToStr(std::this_thread::get_id());
     };
-    lambda();
-    // can't instantiate the internal templates so we don't do lambdas yet
-    // mt.send(lambda);
+    localLambda();
+    mt.send(localLambda);
+    t1.send(localLambda);
+    t2.send(localLambda);
+    
+    // Test global lambda
+    globalLambda();
+    mt.send(globalLambda);
+    t1.send(globalLambda);
+    t2.send(globalLambda);
+    
+    // Test global const lambda
+    globalConstLambda();
+    mt.send(globalConstLambda);
+    t1.send(globalConstLambda);
+    t2.send(globalConstLambda);
+    
+    // Test anonymous lambda
     mt.send([](){
-        tlog << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
     t1.send([](){
-        tlog << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
     t2.send([](){
-        tlog << "Callable lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
     
     // Signal main thread to quit (this effectivelly stops processing all the messages)

@@ -86,30 +86,14 @@ public:
         if (getIsAcceptingMessages())
         {
             std::lock_guard<std::mutex> lock(messageMutex);
-            messageQueue.emplace(new CallableMessage<TCallable>(newMessage));
+            messageQueue.emplace(std::make_unique<CallableMessage<TCallable>>(newMessage));
         }
         else
         {
             throw std::runtime_error("Thread is not excepting any messages, the thread has been signaled for stopping");
         }
     }
-    
-    /// @brief send a message that needs to be executed on this thread
-    /// @param newMessage - any callable object that will be executed on this thread
-    template<typename TCallable>
-    void send(TCallable&& newMessage)
-    {
-        if (getIsAcceptingMessages())
-        {
-            std::lock_guard<std::mutex> lock(messageMutex);
-            messageQueue.emplace(new CallableMessage<TCallable>(std::forward<TCallable>(newMessage)));
-        }
-        else
-        {
-            throw std::runtime_error("Thread is not excepting any messages, the thread has been signaled for stopping");
-        }
-    }
-    
+        
     inline bool operator==(const Thread& other) const noexcept
     {
         return getId() == other.getId();
@@ -222,9 +206,6 @@ private:
     public:
         CallableMessage(const TCallable& initCallableObject)
             : callableObject(initCallableObject)
-        {}
-        CallableMessage(TCallable&& initCallableObject)
-            : callableObject(std::forward<TCallable>(initCallableObject))
         {}
         void call() override
         {
