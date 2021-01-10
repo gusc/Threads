@@ -12,6 +12,7 @@
 #include "Thread.hpp"
 
 #include <tuple>
+#include <map>
 
 namespace gusc::Threads
 {
@@ -82,14 +83,6 @@ class Signal
     private:
         Thread* hostThread;
         std::function<void(TArg...)> callback;
-        
-        template<typename T, typename... U>
-        size_t getFnAddress(std::function<T(U...)> f)
-        {
-            typedef T(fnType)(U...);
-            fnType ** fnPointer = f.template target<fnType*>();
-            return (size_t) *fnPointer;
-        }
     };
     
 public:
@@ -103,8 +96,8 @@ public:
     /// @brief connect a listener callback to this signal
     /// @param thread - listener's thread of affinity
     /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return false if listener has been already connected
-    inline bool connect(Thread* thread, const std::function<void(TArg...)>& callback) noexcept
+    /// @return slot index for disconnecting the slot later or 0 if failed to insert the slot
+    inline size_t connect(Thread* thread, const std::function<void(const TArg&...)>& callback) noexcept
     {
         return connect({thread, callback});
     }
@@ -112,51 +105,37 @@ public:
     /// @brief connect a listener callback to this signal
     /// @param thread - listener's thread of affinity
     /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return false if listener has been already connected
+    /// @return slot index for disconnecting the slot later or 0 if failed to insert the slot
     template<typename TClass>
-    inline bool connect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
+    inline size_t connect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
     {
-        // TODO: figure out whether passing lambda to Slot does not break the whole unique connection logic (Slot comparisson)
         return connect(Slot{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
     }
 
     /// @brief connect a listener callback to this signal
     /// @param thread - listener's thread of affinity
     /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return false if listener from has been already connected
+    /// @return slot index for disconnecting the slot later or 0 if failed to insert the slot
     template<typename TClass>
-    inline bool connect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
+    inline size_t connect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
     {
         return connect(Slot{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
     }
     
     /// @brief disconnect a listener callback from this signal
-    /// @param thread - listener's thread of affinity
-    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @param slotIndex - a slot index assigned and returned from connect() call
     /// @return false if listener was not connected
-    inline bool disconnect(Thread* thread, const std::function<void(TArg...)>& callback) noexcept
+    inline bool disconnect(const size_t slotIndex) noexcept
     {
-        return disconnect({thread, callback});
-    }
-    
-    /// @brief disconnect a listener callback from this signal
-    /// @param thread - listener's thread of affinity
-    /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return false if listener was not connected
-    template<typename TClass>
-    inline bool disconnect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
-    {
-        return disconnect(Slot{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
-    }
-
-    /// @brief disconnect a listener callback from this signal
-    /// @param thread - listener's thread of affinity
-    /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return false if listener was not connected
-    template<typename TClass>
-    inline bool disconnect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
-    {
-        return disconnect(Slot{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+        std::lock_guard<std::mutex> lock(emitMutex);
+        const auto it = indexMap.find(slotIndex);
+        if (it != indexMap.end())
+        {
+            slots.erase(slots.begin() + it->second);
+            indexMap.erase(it);
+            return true;
+        }
+        return false;
     }
     
     /// @brief emit the signal to all of it's listeneres
@@ -172,30 +151,37 @@ public:
     
 private:
     std::vector<Slot> slots;
+    size_t indexCounter { 0 };
+    std::map<size_t, typename std::vector<Slot>::size_type> indexMap;
     std::mutex emitMutex;
     
-    inline bool connect(const Slot& slot) noexcept
-    {
-        std::lock_guard<std::mutex> lock(emitMutex);
-        if (std::find(slots.begin(), slots.end(), slot) == slots.end())
-        {
-            slots.emplace_back(slot);
-            return true;
-        }
-        return false;
-    }
-    
-    inline bool disconnect(const Slot& slot) noexcept
+    inline size_t connect(const Slot& slot) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
         const auto it = std::find(slots.begin(), slots.end(), slot);
-        if (it != slots.end())
+        if (it == slots.end())
         {
-            slots.erase(it);
-            return true;
+            ++indexCounter;
+            slots.emplace_back(slot);
+            indexMap.emplace(indexCounter, slots.size() - 1);
+            return indexCounter;
         }
-        return false;
+        else
+        {
+            const auto index = std::distance(slots.begin(), it);
+            const auto it2 = std::find_if(indexMap.begin(), indexMap.end(),
+                [index](const auto& pair)
+                {
+                    return pair.second == index;
+                });
+            if (it2 != indexMap.end())
+            {
+                return it2->first;
+            }
+        }
+        return 0;
     }
+
 };
 
 /// @brief template specialization for void arguments - unfortunatelly vararg templates can't handle that
@@ -260,15 +246,17 @@ public:
         return connect(Slot{thread, [thread, callback](){(thread->*callback)();}});
     }
     
-    inline bool disconnect(Thread* thread, const std::function<void(void)>& callback) noexcept
+    inline bool disconnect(const size_t slotIndex) noexcept
     {
-        return disconnect({thread, callback});
-    }
-    
-    template<typename TClass>
-    inline bool disconnect(TClass* thread, void(TClass::* callback)(void)) noexcept
-    {
-        return disconnect(Slot{thread, [thread, callback](){(thread->*callback)();}});
+        std::lock_guard<std::mutex> lock(emitMutex);
+        const auto it = indexMap.find(slotIndex);
+        if (it != indexMap.end())
+        {
+            slots.erase(slots.begin() + it->second);
+            indexMap.erase(it);
+            return true;
+        }
+        return false;
     }
     
     inline void emit() noexcept
@@ -282,30 +270,37 @@ public:
     
 private:
     std::vector<Slot> slots;
+    size_t indexCounter { 0 };
+    std::map<size_t, typename std::vector<Slot>::size_type> indexMap;
     std::mutex emitMutex;
     
     inline bool connect(const Slot& slot) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
-        if (std::find(slots.begin(), slots.end(), slot) == slots.end())
-        {
-            slots.emplace_back(slot);
-            return true;
-        }
-        return false;
-    }
-    
-    inline bool disconnect(const Slot& slot) noexcept
-    {
-        std::lock_guard<std::mutex> lock(emitMutex);
         const auto it = std::find(slots.begin(), slots.end(), slot);
-        if (it != slots.end())
+        if (it == slots.end())
         {
-            slots.erase(it);
-            return true;
+            ++indexCounter;
+            slots.emplace_back(slot);
+            indexMap.emplace(indexCounter, slots.size() - 1);
+            return indexCounter;
         }
-        return false;
+        else
+        {
+            const auto index = std::distance(slots.begin(), it);
+            const auto it2 = std::find_if(indexMap.begin(), indexMap.end(),
+                [index](const auto& pair)
+                {
+                    return pair.second == index;
+                });
+            if (it2 != indexMap.end())
+            {
+                return it2->first;
+            }
+        }
+        return 0;
     }
+
 };
 
 }

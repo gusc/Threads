@@ -90,8 +90,8 @@ It's a templated class who's method signature depend on what arguments the signa
 
 `Signal` methods:
 
-* `bool connect(Thread*, const std::function<void(TArg...)>&)` - connect a listener to the signal (returns false if already connected)
-* `bool disconnect(Thread*, const std::function<void(TArg...)>&)` - disconnect a listener from the signal (returns false if not connected)
+* `size_t connect(Thread*, const std::function<void(TArg...)>&)` - connect a listener to the signal (returns the connection ID or 0 if failed to store the connection)
+* `bool disconnect(const size_t)` - disconnect a listener from the signal (returns false if ID not found in connected slot list)
 * `void emit(const TArg&...)` - emit the signal with data - this will call all the connected listeners on their respecitve affinity threads
 
 ### Examples

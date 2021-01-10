@@ -129,61 +129,61 @@ void runSignalTests()
     
     // Connect signals on the main thread
     
-    sigSimple.connect(&mt, &simpleFunction);
-    sigSimple.connect(&mt, std::bind(&MethodWrapper::listenSimple, &mw));
-    sigSimple.connect(&mt, [](){
+    const auto idxMtSimple1 = sigSimple.connect(&mt, &simpleFunction);
+    const auto idxMtSimple2 = sigSimple.connect(&mt, std::bind(&MethodWrapper::listenSimple, &mw));
+    const auto idxMtSimple3 = sigSimple.connect(&mt, [](){
         slog << "Simple lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
-    sigSimple.connect(&mt, simpleLambda);
-    sigSimple.connect(&mt, simpleConstLambda);
-    sigArgs.connect(&mt, &argumentFunction);
+    const auto idxMtSimple4 = sigSimple.connect(&mt, simpleLambda);
+    const auto idxMtSimple5 = sigSimple.connect(&mt, simpleConstLambda);
     
-    sigArgs.connect(&mt, std::bind(&MethodWrapper::listenArgs, &mw, std::placeholders::_1, std::placeholders::_2));
-    sigArgs.connect(&mt, [](int a, bool b){
+    const auto idxMtArgs1 = sigArgs.connect(&mt, &argumentFunction);
+    const auto idxMtArgs2 = sigArgs.connect(&mt, std::bind(&MethodWrapper::listenArgs, &mw, std::placeholders::_1, std::placeholders::_2));
+    const auto idxMtArgs3 = sigArgs.connect(&mt, [](int a, bool b){
         slog << "Argument lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
     });
-    sigArgs.connect(&mt, argsLambda);
-    sigArgs.connect(&mt, argsConstLambda);
+    const auto idxMtArgs4 = sigArgs.connect(&mt, argsLambda);
+    const auto idxMtArgs5 = sigArgs.connect(&mt, argsConstLambda);
     
-    sigObject.connect(&mt, &objectFunction);
-    sigObject.connect(&mt, std::bind(&MethodWrapper::listenObject, &mw, std::placeholders::_1));
-    sigObject.connect(&mt, [](const Object& o){
+    const auto idxMtObject1 = sigObject.connect(&mt, &objectFunction);
+    const auto idxMtObject2 = sigObject.connect(&mt, std::bind(&MethodWrapper::listenObject, &mw, std::placeholders::_1));
+    const auto idxMtObject3 = sigObject.connect(&mt, [](const Object& o){
         slog << "Object lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + o.getVal();
     });
-    sigObject.connect(&mt, objectLambda);
-    sigObject.connect(&mt, objectConstLambda);
+    const auto idxMtObject4 = sigObject.connect(&mt, objectLambda);
+    const auto idxMtObject5 = sigObject.connect(&mt, objectConstLambda);
     
     // Connect signals on other threads
     
-    sigSimple.connect(&t1, &simpleFunction);
-    sigSimple.connect(&t1, std::bind(&MethodWrapper::listenSimple, &mw));
-    sigSimple.connect(&t1, [](){
+    const auto idxT1Simple1 = sigSimple.connect(&t1, &simpleFunction);
+    const auto idxT1Simple2 = sigSimple.connect(&t1, std::bind(&MethodWrapper::listenSimple, &mw));
+    const auto idxT1Simple3 = sigSimple.connect(&t1, [](){
         slog << "Simple lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
-    sigSimple.connect(&t1, simpleLambda);
-    sigSimple.connect(&t1, simpleConstLambda);
+    const auto idxT1Simple4 = sigSimple.connect(&t1, simpleLambda);
+    const auto idxT1Simple5 = sigSimple.connect(&t1, simpleConstLambda);
         
-    sigArgs.connect(&t1, &argumentFunction);
-    sigArgs.connect(&t1, std::bind(&MethodWrapper::listenArgs, &mw, std::placeholders::_1, std::placeholders::_2));
-    sigArgs.connect(&t1, [](int a, bool b){
+    const auto idxT1Args1 = sigArgs.connect(&t1, &argumentFunction);
+    const auto idxT1Args2 = sigArgs.connect(&t1, std::bind(&MethodWrapper::listenArgs, &mw, std::placeholders::_1, std::placeholders::_2));
+    const auto idxT1Args3 = sigArgs.connect(&t1, [](int a, bool b){
         slog << "Argument lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + std::to_string(a) + ", " + std::to_string(b);
     });
-    sigArgs.connect(&t1, argsLambda);
-    sigArgs.connect(&t1, argsConstLambda);
+    const auto idxT1Args4 = sigArgs.connect(&t1, argsLambda);
+    const auto idxT1Args5 = sigArgs.connect(&t1, argsConstLambda);
     
-    sigObject.connect(&t1, &objectFunction);
-    sigObject.connect(&t1, std::bind(&MethodWrapper::listenObject, &mw, std::placeholders::_1));
-    sigObject.connect(&t1, [](const Object& o){
+    const auto idxT1Object1 = sigObject.connect(&t1, &objectFunction);
+    const auto idxT1Object2 = sigObject.connect(&t1, std::bind(&MethodWrapper::listenObject, &mw, std::placeholders::_1));
+    const auto idxT1Object3 = sigObject.connect(&t1, [](const Object& o){
         slog << "Object lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + o.getVal();
     });
-    sigObject.connect(&t1, objectLambda);
-    sigObject.connect(&t1, objectConstLambda);
+    const auto idxT1Object4 = sigObject.connect(&t1, objectLambda);
+    const auto idxT1Object5 = sigObject.connect(&t1, objectConstLambda);
     
     // Custom threads can be connected directly without binding
     
-    sigSimple.connect(&ct, &CustomThread::listenSimple);
-    sigArgs.connect(&ct, &CustomThread::listenArgs);
-    sigObject.connect(&ct, &CustomThread::listenObject);
+    const auto idxCTSimple = sigSimple.connect(&ct, &CustomThread::listenSimple);
+    const auto idxCTArgs = sigArgs.connect(&ct, &CustomThread::listenArgs);
+    const auto idxCTObject = sigObject.connect(&ct, &CustomThread::listenObject);
     
     // Emit signal from different threads
     Object o("ASDF");
@@ -201,39 +201,47 @@ void runSignalTests()
     t1.start();
     mt.stop();
     mt.start();
+    t1.stop();
+    t1.join(); // Let this thread finish up
     
     // Disconnect
-    sigSimple.disconnect(&mt, &simpleFunction);
-    sigSimple.disconnect(&mt, std::bind(&MethodWrapper::listenSimple, &mw));
-    sigSimple.disconnect(&mt, simpleLambda);
-    sigSimple.disconnect(&mt, simpleConstLambda);
+    sigSimple.disconnect(idxMtSimple1);
+    sigSimple.disconnect(idxMtSimple2);
+    sigSimple.disconnect(idxMtSimple3);
+    sigSimple.disconnect(idxMtSimple4);
+    sigSimple.disconnect(idxMtSimple5);
     
-    sigArgs.disconnect(&mt, &argumentFunction);
-    sigArgs.disconnect(&mt, std::bind(&MethodWrapper::listenArgs, &mw, std::placeholders::_1, std::placeholders::_2));
-    sigArgs.disconnect(&mt, argsLambda);
-    sigArgs.disconnect(&mt, argsConstLambda);
+    sigArgs.disconnect(idxMtArgs1);
+    sigArgs.disconnect(idxMtArgs2);
+    sigArgs.disconnect(idxMtArgs3);
+    sigArgs.disconnect(idxMtArgs4);
+    sigArgs.disconnect(idxMtArgs5);
     
-    sigObject.disconnect(&mt, &objectFunction);
-    sigObject.disconnect(&mt, std::bind(&MethodWrapper::listenObject, &mw, std::placeholders::_1));
-    sigObject.disconnect(&mt, objectLambda);
-    sigObject.disconnect(&mt, objectConstLambda);
+    sigObject.disconnect(idxMtObject1);
+    sigObject.disconnect(idxMtObject2);
+    sigObject.disconnect(idxMtObject3);
+    sigObject.disconnect(idxMtObject4);
+    sigObject.disconnect(idxMtObject5);
+        
+    sigSimple.disconnect(idxT1Simple1);
+    sigSimple.disconnect(idxT1Simple2);
+    sigSimple.disconnect(idxT1Simple3);
+    sigSimple.disconnect(idxT1Simple4);
+    sigSimple.disconnect(idxT1Simple5);
     
-    sigSimple.disconnect(&t1, &simpleFunction);
-    sigSimple.disconnect(&t1, std::bind(&MethodWrapper::listenSimple, &mw));
-    sigSimple.disconnect(&t1, simpleLambda);
-    sigSimple.disconnect(&t1, simpleConstLambda);
+    sigArgs.disconnect(idxT1Args1);
+    sigArgs.disconnect(idxT1Args2);
+    sigArgs.disconnect(idxT1Args3);
+    sigArgs.disconnect(idxT1Args4);
+    sigArgs.disconnect(idxT1Args5);
     
-    sigArgs.disconnect(&t1, &argumentFunction);
-    sigArgs.disconnect(&t1, std::bind(&MethodWrapper::listenArgs, &mw, std::placeholders::_1, std::placeholders::_2));
-    sigArgs.disconnect(&t1, argsLambda);
-    sigArgs.disconnect(&t1, argsConstLambda);
+    sigObject.disconnect(idxT1Object1);
+    sigObject.disconnect(idxT1Object2);
+    sigObject.disconnect(idxT1Object3);
+    sigObject.disconnect(idxT1Object4);
+    sigObject.disconnect(idxT1Object5);
     
-    sigObject.disconnect(&t1, &objectFunction);
-    sigObject.disconnect(&t1, std::bind(&MethodWrapper::listenObject, &mw, std::placeholders::_1));
-    sigObject.disconnect(&t1, objectLambda);
-    sigObject.disconnect(&t1, objectConstLambda);
-    
-    sigSimple.disconnect(&ct, &CustomThread::listenSimple);
-    sigArgs.disconnect(&ct, &CustomThread::listenArgs);
-    sigObject.disconnect(&ct, &CustomThread::listenObject);
+    sigSimple.disconnect(idxCTSimple);
+    sigArgs.disconnect(idxCTArgs);
+    sigObject.disconnect(idxCTObject);
 }
