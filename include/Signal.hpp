@@ -43,25 +43,15 @@ class Signal
     {
     public:
         Slot() = delete;
-        Slot(Thread* initHostThread, const std::function<void(TArg...)>& initCallback)
+        Slot(Thread* initHostThread, void* initCallbackPtr, const std::function<void(TArg...)>& initCallback)
             : hostThread(initHostThread)
+            , callbackPtr(initCallbackPtr)
             , callback(initCallback)
         {}
         
         bool operator==(const Slot& other)
         {
-            typedef void(cbType)(TArg...);
-            cbType* const* cbPtr = callback.template target<cbType*>();
-            cbType* const* otherPtr = other.callback.template target<cbType*>();
-            if (hostThread != other.hostThread)
-            {
-                return false;
-            }
-            if (cbPtr && otherPtr)
-            {
-                return *cbPtr == *otherPtr;
-            }
-            return false;
+            return callbackPtr && hostThread == other.hostThread && callbackPtr != other.callbackPtr;
         }
         
         void call(const TArg&... args) const
@@ -81,7 +71,8 @@ class Signal
         }
         
     private:
-        Thread* hostThread;
+        Thread* hostThread { nullptr };
+        void* callbackPtr { nullptr };
         std::function<void(TArg...)> callback;
     };
     
@@ -99,9 +90,11 @@ public:
     /// @return slot index for disconnecting the slot later or 0 if failed to insert the slot
     inline size_t connect(Thread* thread, const std::function<void(const TArg&...)>& callback) noexcept
     {
-        return connect({thread, callback});
+        typedef void(fnType)(const TArg&...);
+        fnType* const* fnPointer = callback.template target<fnType*>();
+        return connect({thread, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
     }
-    
+
     /// @brief connect a listener callback to this signal
     /// @param thread - listener's thread of affinity
     /// @param callback - listener's callback that will be called when signal is emitted
@@ -109,7 +102,7 @@ public:
     template<typename TClass>
     inline size_t connect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
     {
-        return connect(Slot{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+        return connect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
     }
 
     /// @brief connect a listener callback to this signal
@@ -119,10 +112,41 @@ public:
     template<typename TClass>
     inline size_t connect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
     {
-        return connect(Slot{thread, [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+        return connect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
     }
     
     /// @brief disconnect a listener callback from this signal
+    /// @param thread - listener's thread of affinity
+    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @return false if listener was not connected
+    inline bool disconnect(Thread* thread, const std::function<void(const TArg&...)>& callback) noexcept
+    {
+        typedef void(fnType)(const TArg&...);
+        fnType* const* fnPointer = callback.template target<fnType*>();
+        return disconnect({thread, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
+    }
+    
+    /// @brief disconnect a listener callback from this signal
+    /// @param thread - listener's thread of affinity
+    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @return false if listener was not connected
+    template<typename TClass>
+    inline bool disconnect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
+    {
+        return disconnect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+    }
+
+    /// @brief disconnect a listener callback from this signal
+    /// @param thread - listener's thread of affinity
+    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @return false if listener was not connected
+    template<typename TClass>
+    inline bool disconnect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
+    {
+        return disconnect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+    }
+    
+    /// @brief disconnect a listener callback from this signal using it's connection ID
     /// @param slotIndex - a slot index assigned and returned from connect() call
     /// @return false if listener was not connected
     inline bool disconnect(const size_t slotIndex) noexcept
@@ -181,6 +205,26 @@ private:
         }
         return 0;
     }
+    
+    inline bool disconnect(const Slot& slot) noexcept
+    {
+        std::lock_guard<std::mutex> lock(emitMutex);
+        const auto it = std::find(slots.begin(), slots.end(), slot);
+        if (it != slots.end())
+        {
+            const auto slotIndex = std::distance(slots.begin(), it);
+            slots.erase(it);
+            const auto idxIt = std::find_if(indexMap.begin(), indexMap.end(), [&slotIndex](const std::pair<size_t, typename std::vector<Slot>::size_type>& val){
+                return val.second == slotIndex;
+            });
+            if (idxIt != indexMap.end())
+            {
+                indexMap.erase(idxIt);
+            }
+            return true;
+        }
+        return false;
+    }
 
 };
 
@@ -192,21 +236,15 @@ class Signal<void>
     {
     public:
         Slot() = delete;
-        Slot(Thread* initHostThread, const std::function<void(void)>& initCallback)
+        Slot(Thread* initHostThread, void* initCallbackPtr, const std::function<void(void)>& initCallback)
             : hostThread(initHostThread)
+            , callbackPtr(initCallbackPtr)
             , callback(initCallback)
         {}
         
         bool operator==(const Slot& other)
         {
-            typedef void(cbType)(void);
-            cbType* const* cbPtr = callback.template target<cbType*>();
-            cbType* const* otherPtr = other.callback.template target<cbType*>();
-            if (cbPtr && otherPtr)
-            {
-                return *cbPtr == *otherPtr;
-            }
-            return false;
+            return callbackPtr && hostThread == other.hostThread && callbackPtr == other.callbackPtr;
         }
         
         void call() const
@@ -222,7 +260,8 @@ class Signal<void>
         }
         
     private:
-        Thread* hostThread;
+        Thread* hostThread { nullptr };
+        void* callbackPtr { nullptr };
         std::function<void(void)> callback;
     };
 
@@ -237,15 +276,30 @@ public:
     
     inline bool connect(Thread* thread, const std::function<void(void)>& callback) noexcept
     {
-        return connect({thread, callback});
+        typedef void(fnType)(void);
+        fnType* const* fnPointer = callback.target<fnType*>();
+        return connect({thread, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
     }
     
     template<typename TClass>
     inline bool connect(TClass* thread, void(TClass::* callback)(void)) noexcept
     {
-        return connect(Slot{thread, [thread, callback](){(thread->*callback)();}});
+        return connect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](){(thread->*callback)();}});
     }
     
+    inline bool disconnect(Thread* thread, const std::function<void(void)>& callback) noexcept
+    {
+        typedef void(fnType)(void);
+        fnType* const* fnPointer = callback.target<fnType*>();
+        return disconnect({thread, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
+    }
+    
+    template<typename TClass>
+    inline bool disconnect(TClass* thread, void(TClass::* callback)(void)) noexcept
+    {
+        return disconnect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](){(thread->*callback)();}});
+    }
+
     inline bool disconnect(const size_t slotIndex) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
@@ -299,6 +353,26 @@ private:
             }
         }
         return 0;
+    }
+    
+    inline bool disconnect(const Slot& slot) noexcept
+    {
+        std::lock_guard<std::mutex> lock(emitMutex);
+        const auto it = std::find(slots.begin(), slots.end(), slot);
+        if (it != slots.end())
+        {
+            const auto slotIndex = std::distance(slots.begin(), it);
+            slots.erase(it);
+            const auto idxIt = std::find_if(indexMap.begin(), indexMap.end(), [&slotIndex](const std::pair<size_t, typename std::vector<Slot>::size_type>& val){
+                return val.second == slotIndex;
+            });
+            if (idxIt != indexMap.end())
+            {
+                indexMap.erase(idxIt);
+            }
+            return true;
+        }
+        return false;
     }
 
 };
