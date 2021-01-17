@@ -91,8 +91,13 @@ It's a templated class who's method signature depend on what arguments the signa
 `Signal` methods:
 
 * `size_t connect(Thread*, const std::function<void(TArg...)>&)` - connect a listener to the signal (returns the connection ID or 0 if failed to store the connection)
-* `bool disconnect(const size_t)` - disconnect a listener from the signal (returns false if ID not found in connected slot list)
+* `size_t connect(T*, const void(T::*)(TArg...))` - connect a listener member method of Thread class derivative to the signal (returns the connection ID or 0 if failed to store the connection)
+* `bool disconnect(Thread*, const std::function<void(TArg...)>&)` - disconnect a listener from the signal (returns false if function/thread pair is not found or if function came from temporary object, like std::bind)
+* `bool disconnect(T*, const void(T::*)(TArg...))` - disconnect a listener member method of Thread class derivative from the signal (returns false if function/thread is not found in connection list)
+* `bool disconnect(const size_t)` - disconnect a listener from the signal by connection ID (returns false if ID not found in connection list)
 * `void emit(const TArg&...)` - emit the signal with data - this will call all the connected listeners on their respecitve affinity threads
+
+When disconnecting listeners from signals, for function objects, like ones returned by `std::bind` or lambdas, you should use connection ID's.
 
 ### Examples
 
@@ -140,10 +145,10 @@ int main(int argc, const char * argv[]) {
     gusc::Threads::Thread workerThread;
     
     MyObject my;
-    my.sigSimple.connect(&workerThread, [](){
+    const auto connection1 = my.sigSimple.connect(&workerThread, [](){
         std::cout << "lambda thread ID: " << id << "\n";
     });
-    my.sigSimple.connect(&mainThread, [](){
+    const auto connection2 = my.sigSimple.connect(&mainThread, [](){
         std::cout << "lambda thread ID: " << id << "\n";
     });
     
@@ -155,6 +160,9 @@ int main(int argc, const char * argv[]) {
     workerThread.start();
     myThread.start(); 
     mainThread.start(); // Blocks indefinitely
+    
+    my.sigSimple.disconnect(connection1);
+    my.sigSimple.disconnect(connection2);
     return 0;
 }
 
