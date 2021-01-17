@@ -29,7 +29,7 @@ class Signal
             : callback(initCallback)
             , data(initData...)
         {}
-        void operator()()
+        inline void operator()()
         {
             std::apply(callback, data);
         }
@@ -49,12 +49,22 @@ class Signal
             , callback(initCallback)
         {}
         
-        bool operator==(const Slot& other)
+        inline void setConnectionId(size_t newConnectionId) noexcept
+        {
+            connectionId = newConnectionId;
+        }
+        
+        inline size_t getConnectionId() const noexcept
+        {
+            return connectionId;
+        }
+        
+        inline bool operator==(const Slot& other) const noexcept
         {
             return callbackPtr && hostThread == other.hostThread && callbackPtr != other.callbackPtr;
         }
         
-        void call(const TArg&... args) const
+        inline void call(const TArg&... args) const
         {
             if (!hostThread)
             {
@@ -74,6 +84,8 @@ class Signal
         Thread* hostThread { nullptr };
         void* callbackPtr { nullptr };
         std::function<void(TArg...)> callback;
+        size_t connectionId { 0 };
+
     };
     
 public:
@@ -87,7 +99,7 @@ public:
     /// @brief connect a listener callback to this signal
     /// @param thread - listener's thread of affinity
     /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return slot index for disconnecting the slot later or 0 if failed to insert the slot
+    /// @return connection ID for disconnecting the slot later or 0 if failed to insert the slot
     inline size_t connect(Thread* thread, const std::function<void(const TArg&...)>& callback) noexcept
     {
         typedef void(fnType)(const TArg&...);
@@ -98,7 +110,7 @@ public:
     /// @brief connect a listener callback to this signal
     /// @param thread - listener's thread of affinity
     /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return slot index for disconnecting the slot later or 0 if failed to insert the slot
+    /// @return connection ID for disconnecting the slot later or 0 if failed to insert the slot
     template<typename TClass>
     inline size_t connect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
     {
@@ -108,7 +120,7 @@ public:
     /// @brief connect a listener callback to this signal
     /// @param thread - listener's thread of affinity
     /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return slot index for disconnecting the slot later or 0 if failed to insert the slot
+    /// @return connection ID for disconnecting the slot later or 0 if failed to insert the slot
     template<typename TClass>
     inline size_t connect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
     {
@@ -147,16 +159,17 @@ public:
     }
     
     /// @brief disconnect a listener callback from this signal using it's connection ID
-    /// @param slotIndex - a slot index assigned and returned from connect() call
-    /// @return false if listener was not connected
-    inline bool disconnect(const size_t slotIndex) noexcept
+    /// @param connectionId - a connection ID assigned and returned from connect() call
+    /// @return false if no listener with this connection ID was found
+    inline bool disconnect(const size_t connectionId) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
-        const auto it = indexMap.find(slotIndex);
-        if (it != indexMap.end())
+        const auto it = std::find_if(slots.begin(), slots.end(), [&connectionId](const Slot& s){
+            return s.getConnectionId() == connectionId;
+        });
+        if (it != slots.end())
         {
-            slots.erase(slots.begin() + it->second);
-            indexMap.erase(it);
+            slots.erase(it);
             return true;
         }
         return false;
@@ -175,8 +188,7 @@ public:
     
 private:
     std::vector<Slot> slots;
-    size_t indexCounter { 0 };
-    std::map<size_t, typename std::vector<Slot>::size_type> indexMap;
+    size_t uniqueIdCounter { 0 };
     std::mutex emitMutex;
     
     inline size_t connect(const Slot& slot) noexcept
@@ -185,23 +197,14 @@ private:
         const auto it = std::find(slots.begin(), slots.end(), slot);
         if (it == slots.end())
         {
-            ++indexCounter;
-            slots.emplace_back(slot);
-            indexMap.emplace(indexCounter, slots.size() - 1);
-            return indexCounter;
+            auto& s = slots.emplace_back(slot);
+            ++uniqueIdCounter;
+            s.setConnectionId(uniqueIdCounter);
+            return uniqueIdCounter;
         }
         else
         {
-            const auto index = std::distance(slots.begin(), it);
-            const auto it2 = std::find_if(indexMap.begin(), indexMap.end(),
-                [index](const auto& pair)
-                {
-                    return pair.second == index;
-                });
-            if (it2 != indexMap.end())
-            {
-                return it2->first;
-            }
+            return it->getConnectionId();
         }
         return 0;
     }
@@ -214,13 +217,6 @@ private:
         {
             const auto slotIndex = std::distance(slots.begin(), it);
             slots.erase(it);
-            const auto idxIt = std::find_if(indexMap.begin(), indexMap.end(), [&slotIndex](const std::pair<size_t, typename std::vector<Slot>::size_type>& val){
-                return val.second == slotIndex;
-            });
-            if (idxIt != indexMap.end())
-            {
-                indexMap.erase(idxIt);
-            }
             return true;
         }
         return false;
@@ -241,6 +237,16 @@ class Signal<void>
             , callbackPtr(initCallbackPtr)
             , callback(initCallback)
         {}
+        
+        inline void setConnectionId(size_t newConnectionId) noexcept
+        {
+            connectionId = newConnectionId;
+        }
+        
+        inline size_t getConnectionId() const noexcept
+        {
+            return connectionId;
+        }
         
         bool operator==(const Slot& other)
         {
@@ -263,6 +269,8 @@ class Signal<void>
         Thread* hostThread { nullptr };
         void* callbackPtr { nullptr };
         std::function<void(void)> callback;
+        size_t connectionId { 0 };
+
     };
 
     
@@ -300,14 +308,15 @@ public:
         return disconnect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](){(thread->*callback)();}});
     }
 
-    inline bool disconnect(const size_t slotIndex) noexcept
+    inline bool disconnect(const size_t connectionId) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
-        const auto it = indexMap.find(slotIndex);
-        if (it != indexMap.end())
+        const auto it = std::find_if(slots.begin(), slots.end(), [&connectionId](const Slot& s){
+            return s.getConnectionId() == connectionId;
+        });
+        if (it != slots.end())
         {
-            slots.erase(slots.begin() + it->second);
-            indexMap.erase(it);
+            slots.erase(it);
             return true;
         }
         return false;
@@ -324,7 +333,7 @@ public:
     
 private:
     std::vector<Slot> slots;
-    size_t indexCounter { 0 };
+    size_t uniqueIdCounter { 0 };
     std::map<size_t, typename std::vector<Slot>::size_type> indexMap;
     std::mutex emitMutex;
     
@@ -334,23 +343,14 @@ private:
         const auto it = std::find(slots.begin(), slots.end(), slot);
         if (it == slots.end())
         {
-            ++indexCounter;
-            slots.emplace_back(slot);
-            indexMap.emplace(indexCounter, slots.size() - 1);
-            return indexCounter;
+            auto& s = slots.emplace_back(slot);
+            ++uniqueIdCounter;
+            s.setConnectionId(uniqueIdCounter);
+            return uniqueIdCounter;
         }
         else
         {
-            const auto index = std::distance(slots.begin(), it);
-            const auto it2 = std::find_if(indexMap.begin(), indexMap.end(),
-                [index](const auto& pair)
-                {
-                    return pair.second == index;
-                });
-            if (it2 != indexMap.end())
-            {
-                return it2->first;
-            }
+            return it->getConnectionId();
         }
         return 0;
     }
@@ -363,13 +363,6 @@ private:
         {
             const auto slotIndex = std::distance(slots.begin(), it);
             slots.erase(it);
-            const auto idxIt = std::find_if(indexMap.begin(), indexMap.end(), [&slotIndex](const std::pair<size_t, typename std::vector<Slot>::size_type>& val){
-                return val.second == slotIndex;
-            });
-            if (idxIt != indexMap.end())
-            {
-                indexMap.erase(idxIt);
-            }
             return true;
         }
         return false;
