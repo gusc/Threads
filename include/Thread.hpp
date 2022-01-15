@@ -38,6 +38,7 @@ public:
     {
         setIsAcceptingMessages(false);
         setIsRunning(false);
+        queueWait.notify_one();
         join();
     }
     
@@ -63,6 +64,7 @@ public:
         {
             setIsAcceptingMessages(false);
             setIsRunning(false);
+            queueWait.notify_one();
         }
         else
         {
