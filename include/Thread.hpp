@@ -140,31 +140,43 @@ protected:
         {
             std::unique_ptr<Message> next;
             {
+                const auto timeNow = std::chrono::steady_clock::now();
                 std::unique_lock<std::mutex> lock(messageMutex);
                 // Wait for any messages to arrive
-                if (messageQueue.empty())
+                if (messageQueue.empty() && delayedQueue.empty())
                 {
+                    // We wait for a new message to be pushed on any of the queues
                     queueWait.wait(lock);
                 }
                 // Move delayed messages to main queue
-                if (delayedQueue.size())
+                if (!delayedQueue.empty())
                 {
-                    const auto timeNow = std::chrono::steady_clock::now();
+                    auto hasNew { false };
                     for (auto it = delayedQueue.begin(); it != delayedQueue.end();)
                     {
                         if (it->first < timeNow)
                         {
                             messageQueue.emplace(std::move(it->second));
                             it = delayedQueue.erase(it);
+                            hasNew = true;
                         }
                         else
                         {
-                            ++it;
+                            break;
+                        }
+                    }
+                    if (!hasNew)
+                    {
+                        // If there are queued items but none were added to the queue wait till next queued item
+                        auto nextTime = delayedQueue.lower_bound(timeNow);
+                        if (nextTime != delayedQueue.end())
+                        {
+                            queueWait.wait_until(lock, nextTime->first);
                         }
                     }
                 }
                 // Get the next message from the main queue
-                if (messageQueue.size())
+                if (!messageQueue.empty())
                 {
                     next = std::move(messageQueue.front());
                     messageQueue.pop();
