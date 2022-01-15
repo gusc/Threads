@@ -13,6 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <queue>
+#include <map>
 #include <mutex>
 #include <utility>
 
@@ -87,6 +88,25 @@ public:
         {
             std::lock_guard<std::mutex> lock(messageMutex);
             messageQueue.emplace(std::make_unique<CallableMessage<TCallable>>(newMessage));
+            queueWait.notify_one();
+        }
+        else
+        {
+            throw std::runtime_error("Thread is not excepting any messages, the thread has been signaled for stopping");
+        }
+    }
+    
+    /// @brief send a delayed message that needs to be executed on this thread
+    /// @param newMessage - any callable object that will be executed on this thread
+    template<typename TCallable>
+    void sendDelayed(const TCallable& newMessage, const std::chrono::milliseconds& timeout)
+    {
+        if (getIsAcceptingMessages())
+        {
+            std::lock_guard<std::mutex> lock(messageMutex);
+            auto time = std::chrono::steady_clock::now() + timeout;
+            delayedQueue.emplace(time, std::make_unique<CallableMessage<TCallable>>(newMessage));
+            queueWait.notify_one();
         }
         else
         {
@@ -118,7 +138,30 @@ protected:
         {
             std::unique_ptr<Message> next;
             {
-                std::lock_guard<std::mutex> lock(messageMutex);
+                std::unique_lock<std::mutex> lock(messageMutex);
+                // Wait for any messages to arrive
+                if (messageQueue.empty())
+                {
+                    queueWait.wait(lock);
+                }
+                // Move delayed messages to main queue
+                if (delayedQueue.size())
+                {
+                    const auto timeNow = std::chrono::steady_clock::now();
+                    for (auto it = delayedQueue.begin(); it != delayedQueue.end();)
+                    {
+                        if (it->first < timeNow)
+                        {
+                            messageQueue.emplace(std::move(it->second));
+                            it = delayedQueue.erase(it);
+                        }
+                        else
+                        {
+                            ++it;
+                        }
+                    }
+                }
+                // Get the next message from the main queue
                 if (messageQueue.size())
                 {
                     next = std::move(messageQueue.front());
@@ -129,18 +172,6 @@ protected:
             {
                 missCounter = 0;
                 next->call();
-            }
-            else
-            {
-                if (missCounter < MaxSpinCycles)
-                {
-                    ++missCounter;
-                    std::this_thread::yield();
-                }
-                else
-                {
-                    std::this_thread::sleep_for(std::chrono::nanoseconds(1));
-                }
             }
         }
         runLeftovers();
@@ -219,7 +250,9 @@ private:
     std::atomic<bool> isRunning { false };
     std::atomic<bool> isAcceptingMessages { true };
     std::queue<std::unique_ptr<Message>> messageQueue;
+    std::map<std::chrono::time_point<std::chrono::steady_clock>, std::unique_ptr<Message>> delayedQueue;
     std::unique_ptr<std::thread> thread;
+    std::condition_variable queueWait;
     std::mutex messageMutex;
 };
 
