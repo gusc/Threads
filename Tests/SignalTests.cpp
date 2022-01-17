@@ -8,8 +8,8 @@
 
 #include "SignalTests.hpp"
 #include "Utilities.hpp"
-#include "Thread.hpp"
-#include "Signal.hpp"
+#include "Threads/Thread.hpp"
+#include "Threads/Signal.hpp"
 
 #include <future>
 

@@ -8,7 +8,7 @@
 
 #include "ThreadTests.hpp"
 #include "Utilities.hpp"
-#include "Thread.hpp"
+#include "Threads/Thread.hpp"
 
 namespace
 {
