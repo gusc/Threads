@@ -241,6 +241,7 @@ private:
     class Message
     {
     public:
+        virtual ~Message() = default;
         virtual void call() {}
     };
     
