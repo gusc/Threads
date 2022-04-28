@@ -16,6 +16,7 @@
 #include <map>
 #include <mutex>
 #include <utility>
+#include <future>
 
 namespace
 {
@@ -114,6 +115,38 @@ public:
         {
             throw std::runtime_error("Thread is not excepting any messages, the thread has been signaled for stopping");
         }
+    }
+    
+    /// @brief send a message that needs to be executed on this thread and wait for it's completion, the completion is controlled by message callable
+    /// @param newMessage - any callable object that will be executed on this thread and it must call the promise provied to it (signature: void(std::promise<TReturn>)
+    template<typename TReturn, typename TCallable>
+    std::future<TReturn> sendWithPromise(const TCallable& newMessage)
+    {
+        if (getIsAcceptingMessages())
+        {
+            std::promise<TReturn> promise;
+            std::future<TReturn> future = promise.get_future();
+            std::lock_guard<std::mutex> lock(messageMutex);
+            messageQueue.emplace(std::make_unique<CallableMessageWithPromise<TReturn, TCallable>>(newMessage, std::move(promise)));
+            queueWait.notify_one();
+            return future;
+        }
+        else
+        {
+            throw std::runtime_error("Thread is not excepting any messages, the thread has been signaled for stopping");
+        }
+    }
+    
+    /// @brief send a message that needs to be executed on this thread and wait for it's completion
+    /// @param newMessage - any callable object that will be executed on this thread
+    template<typename TCallable>
+    void sendWait(const TCallable& newMessage)
+    {
+        auto future = sendWithPromise<void>([newMessage](std::promise<void> promise){
+            newMessage();
+            promise.set_value();
+        });
+        future.wait();
     }
         
     inline bool operator==(const Thread& other) const noexcept
@@ -259,6 +292,24 @@ private:
         }
     private:
         TCallable callableObject;
+    };
+    
+    /// @brief templated message to wrap a callable object which accepts promise object that can be used to signal finish of the callable (useful for subsequent async calls)
+    template<typename TReturn, typename TCallable>
+    class CallableMessageWithPromise : public Message
+    {
+    public:
+        CallableMessageWithPromise(const TCallable& initCallableObject, std::promise<TReturn> initWaitablePromise)
+            : callableObject(initCallableObject)
+            , waitablePromise(std::move(initWaitablePromise))
+        {}
+        void call() override
+        {
+            callableObject(std::move(waitablePromise));
+        }
+    private:
+        TCallable callableObject;
+        std::promise<TReturn> waitablePromise;
     };
     
     std::size_t missCounter { 0 };
