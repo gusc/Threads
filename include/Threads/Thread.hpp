@@ -117,10 +117,10 @@ public:
         }
     }
     
-    /// @brief send a message that needs to be executed on this thread and wait for it's completion, the completion is controlled by message callable
-    /// @param newMessage - any callable object that will be executed on this thread and it must call the promise provied to it (signature: void(std::promise<TReturn>)
+    /// @brief send an asynchronous message that returns value and needs to be executed on this thread (calling thread is not blocked)
+    /// @param newMessage - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
     template<typename TReturn, typename TCallable>
-    std::future<TReturn> sendWithPromise(const TCallable& newMessage)
+    std::future<TReturn> sendAsync(const TCallable& newMessage)
     {
         if (getIsAcceptingMessages())
         {
@@ -137,16 +137,21 @@ public:
         }
     }
     
+    /// @brief send a synchronous message that returns value and needs to be executed on this thread (calling thread is blocked until message returns)
+    /// @param newMessage - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
+    template<typename TReturn, typename TCallable>
+    TReturn sendSync(const TCallable& newMessage)
+    {
+        auto future = sendAsync<TReturn>(newMessage);
+        return future.get();
+    }
+    
     /// @brief send a message that needs to be executed on this thread and wait for it's completion
     /// @param newMessage - any callable object that will be executed on this thread
     template<typename TCallable>
     void sendWait(const TCallable& newMessage)
     {
-        auto future = sendWithPromise<void>([newMessage](std::promise<void> promise){
-            newMessage();
-            promise.set_value();
-        });
-        future.wait();
+        sendSync<void>(newMessage);
     }
         
     inline bool operator==(const Thread& other) const noexcept
@@ -305,11 +310,25 @@ private:
         {}
         void call() override
         {
-            callableObject(std::move(waitablePromise));
+            actualCall<TReturn>();
         }
     private:
         TCallable callableObject;
         std::promise<TReturn> waitablePromise;
+        
+        template<typename TR>
+        void actualCall()
+        {
+            waitablePromise.set_value(callableObject());
+        }
+        
+        template<>
+        void actualCall<void>()
+        {
+            callableObject();
+            waitablePromise.set_value();
+        }
+        
     };
     
     std::size_t missCounter { 0 };

@@ -39,27 +39,49 @@ Additionally library provides a `ThisThread` class to execute run-loop on curren
 This will make the each lambda run on a different thread:
 
 ```c++
-gusc::Threads::Thread th1;
-gusc::Threads::Thread th2;
-
-th1.send([](){
+{
+    gusc::Threads::Thread th1;
+    gusc::Threads::Thread th2;
+    
     auto id = std::this_thread::get_id();
-    std::cout << "This is a worker on thread ID: " << id << std::endl;
-});
-
-th2.send([](){
-    auto id = std::this_thread::get_id();
-    std::cout << "This is a worker on thread ID: " << id << std::endl;
-});
-
-auto id = std::this_thread::get_id();
-std::cout << "Main thread ID: " << id << std::endl;
-
-// You have to start threads to process all the messages
-th1.start();
-th2.start();
-// Both threads will be joined up on destruction
+    std::cout << "Main thread ID: " << id << std::endl;
+    
+    // You have to start threads to process all the messages
+    th1.start();
+    th2.start();
+    
+    // Place messages on both threads
+    th1.send([](){
+        auto id = std::this_thread::get_id();
+        std::cout << "This is a worker on thread ID: " << id << std::endl;
+    });
+    
+    th2.send([](){
+        auto id = std::this_thread::get_id();
+        std::cout << "This is a worker on thread ID: " << id << std::endl;
+    });
+    
+    // Place a synchronous message - this blocks current thread until the th1 finishes this miessage
+    th1.sendWait([](){
+       
+    });
+    
+    // Place a message returning a synchronous result
+    auto result1 = th1.sendSync<int>([]() -> int {
+        return 1;
+    });
+    
+    // Place a message returning an asynchronous result via std::future
+    auto f = th2.sendAsync<bool>([]() -> bool {
+        return true;
+    });
+    auto result2 = f.get();
+    
+    // Both threads will be joined up on thread object destruction
+}
 ```
+
+@note: Be careful with blocking calls - calling blockign call from the same thread will result in a deadlock.
 
 Example with `ThisThread` - this will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.stop()` call.
 
