@@ -31,6 +31,8 @@ This gives you options to post worker functions to be executed in different thre
 
 `Thread` class automatically joins on destruction.
 
+*Blocking call warning*: Sending a blocking message on a thread that is not started will result in an exception!
+
 ### ThisThread class
 
 Additionally library provides a `ThisThread` class to execute run-loop on current thread. This is intended to be used only on a main thread or any other thread that was not started by `Thread` class.
@@ -83,8 +85,6 @@ This will make the each lambda run on a different thread:
     // Both threads will be joined up on thread object destruction
 }
 ```
-
-@note: Be careful with blocking calls - calling blockign call from the same thread will result in a deadlock.
 
 Example with `ThisThread` - this will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.stop()` call.
 

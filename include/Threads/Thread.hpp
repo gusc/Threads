@@ -118,6 +118,7 @@ public:
     }
     
     /// @brief send an asynchronous message that returns value and needs to be executed on this thread (calling thread is not blocked)
+    /// @note if sent from the same thread this method will call the callable immediatelly to prevent deadlocking
     /// @param newMessage - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
     template<typename TReturn, typename TCallable>
     std::future<TReturn> sendAsync(const TCallable& newMessage)
@@ -126,9 +127,18 @@ public:
         {
             std::promise<TReturn> promise;
             std::future<TReturn> future = promise.get_future();
-            std::lock_guard<std::mutex> lock(messageMutex);
-            messageQueue.emplace(std::make_unique<CallableMessageWithPromise<TReturn, TCallable>>(newMessage, std::move(promise)));
-            queueWait.notify_one();
+            if (getIsSameThread())
+            {
+                // If we are on the same thread excute message immediatelly to prent a deadlock
+                auto message = std::make_unique<CallableMessageWithPromise<TReturn, TCallable>>(newMessage, std::move(promise));
+                message->call();
+            }
+            else
+            {
+                std::lock_guard<std::mutex> lock(messageMutex);
+                messageQueue.emplace(std::make_unique<CallableMessageWithPromise<TReturn, TCallable>>(newMessage, std::move(promise)));
+                queueWait.notify_one();
+            }
             return future;
         }
         else
@@ -138,10 +148,15 @@ public:
     }
     
     /// @brief send a synchronous message that returns value and needs to be executed on this thread (calling thread is blocked until message returns)
+    /// @note to prevent deadlocking this method throws exception if called before thread has started
     /// @param newMessage - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
     template<typename TReturn, typename TCallable>
     TReturn sendSync(const TCallable& newMessage)
     {
+        if (!getIsRunning())
+        {
+            throw std::runtime_error("Can not place a blocking message if the thread is not started");
+        }
         auto future = sendAsync<TReturn>(newMessage);
         return future.get();
     }
@@ -271,6 +286,11 @@ protected:
     inline void setIsAcceptingMessages(bool newIsAcceptingMessages) noexcept
     {
         isAcceptingMessages = newIsAcceptingMessages;
+    }
+    
+    inline bool getIsSameThread() const noexcept
+    {
+        return getId() == std::this_thread::get_id();
     }
 
 private:

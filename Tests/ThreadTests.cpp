@@ -10,6 +10,10 @@
 #include "Utilities.hpp"
 #include "Threads/Thread.hpp"
 
+#include <chrono>
+
+using namespace std::chrono_literals;
+
 namespace
 {
 static Logger tlog;
@@ -110,6 +114,14 @@ void runThreadTests()
     mt.send([](){
         tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
+    t1.sendDelayed([](){
+        tlog << "Delayed message on thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog.flush();
+    }, 1s);
+    t2.sendDelayed([](){
+        tlog << "Delayed message on thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog.flush();
+    }, 2s);
     t1.send([](){
         tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
@@ -117,10 +129,54 @@ void runThreadTests()
         tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
     
+    // Test blocking before start
+    try
+    {
+        t1.sendWait([](){
+            tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        });
+    }
+    catch (const std::exception& ex)
+    {
+        tlog << ex.what();
+    }
+    
     // Signal main thread to quit (this effectivelly stops processing all the messages)
     mt.stop();
     // Start all threads and main run-loop
     t1.start();
     t2.start();
+    
+    // Test blocking calls
+    t1.sendWait([](){
+        tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+    });
+    t2.sendWait([](){
+        tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+    });
+    auto f1 = t1.sendAsync<int>([&]() -> int {
+        // Try to do a blocking call from the same thread
+        t1.sendWait([](){
+            tlog << "Sub blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        });
+        return 10;
+    });
+    auto f2 = t2.sendAsync<int>([]() -> int {
+        return 20;
+    });
+    auto res1 = t1.sendSync<int>([&]() -> int {
+        // Try to do a blocking call from the same thread
+        t1.sendWait([](){
+            tlog << "Sub blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        });
+        return 1;
+    });
+    auto res2 = t2.sendSync<int>([]() -> int {
+        return 2;
+    });
+    tlog << "Sync and async results" << std::to_string(f1.get()) << std::to_string(f2.get()) << std::to_string(res1) << std::to_string(res2);
+    tlog.flush();
+    
     mt.start();
+    std::this_thread::sleep_for(3s);
 }
