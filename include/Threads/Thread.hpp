@@ -35,7 +35,7 @@ public:
     Thread& operator=(const Thread&) = delete;
     Thread(Thread&&) = delete;
     Thread& operator=(Thread&&) = delete;
-    ~Thread()
+    virtual ~Thread()
     {
         setIsAcceptingMessages(false);
         setIsRunning(false);
