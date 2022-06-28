@@ -37,9 +37,12 @@ public:
     Thread& operator=(Thread&&) = delete;
     virtual ~Thread()
     {
-        setIsAcceptingMessages(false);
-        setIsRunning(false);
-        queueWait.notify_one();
+        {
+            std::lock_guard<std::mutex> lock(messageMutex);
+            setIsAcceptingMessages(false);
+            setIsRunning(false);
+            queueWait.notify_one();
+        }
         join();
     }
     
@@ -63,6 +66,7 @@ public:
     {
         if (thread)
         {
+            std::lock_guard<std::mutex> lock(messageMutex);
             setIsAcceptingMessages(false);
             setIsRunning(false);
             queueWait.notify_one();
