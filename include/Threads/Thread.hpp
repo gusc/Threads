@@ -17,6 +17,7 @@
 #include <mutex>
 #include <utility>
 #include <future>
+#include <iostream>
 
 namespace
 {
@@ -47,7 +48,7 @@ public:
     }
     
     /// @brief start the thread and it's run-loop
-    virtual void start()
+    virtual inline void start()
     {
         if (!getIsRunning())
         {
@@ -62,7 +63,7 @@ public:
     
     /// @brief signal the thread to stop - this also stops receiving messages
     /// @warning if a message is sent after calling this method an exception will be thrown
-    virtual void stop()
+    virtual inline void stop()
     {
         if (thread)
         {
@@ -78,7 +79,7 @@ public:
     }
     
     /// @brief join the thread and wait unti it's finished
-    void join()
+    inline void join()
     {
         if (thread && thread->joinable())
         {
@@ -89,7 +90,7 @@ public:
     /// @brief send a message that needs to be executed on this thread
     /// @param newMessage - any callable object that will be executed on this thread
     template<typename TCallable>
-    void send(const TCallable& newMessage)
+    inline void send(const TCallable& newMessage)
     {
         if (getIsAcceptingMessages())
         {
@@ -106,7 +107,7 @@ public:
     /// @brief send a delayed message that needs to be executed on this thread
     /// @param newMessage - any callable object that will be executed on this thread
     template<typename TCallable>
-    void sendDelayed(const TCallable& newMessage, const std::chrono::milliseconds& timeout)
+    inline void sendDelayed(const TCallable& newMessage, const std::chrono::milliseconds& timeout)
     {
         if (getIsAcceptingMessages())
         {
@@ -125,7 +126,7 @@ public:
     /// @note if sent from the same thread this method will call the callable immediatelly to prevent deadlocking
     /// @param newMessage - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
     template<typename TReturn, typename TCallable>
-    std::future<TReturn> sendAsync(const TCallable& newMessage)
+    inline std::future<TReturn> sendAsync(const TCallable& newMessage)
     {
         if (getIsAcceptingMessages())
         {
@@ -155,7 +156,7 @@ public:
     /// @note to prevent deadlocking this method throws exception if called before thread has started
     /// @param newMessage - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
     template<typename TReturn, typename TCallable>
-    TReturn sendSync(const TCallable& newMessage)
+    inline TReturn sendSync(const TCallable& newMessage)
     {
         if (!getIsRunning())
         {
@@ -168,7 +169,7 @@ public:
     /// @brief send a message that needs to be executed on this thread and wait for it's completion
     /// @param newMessage - any callable object that will be executed on this thread
     template<typename TCallable>
-    void sendWait(const TCallable& newMessage)
+    inline void sendWait(const TCallable& newMessage)
     {
         sendSync<void>(newMessage);
     }
@@ -191,7 +192,7 @@ public:
     }
     
 protected:
-    void runLoop()
+    inline void runLoop()
     {
         while (getIsRunning())
         {
@@ -248,7 +249,7 @@ protected:
         runLeftovers();
     }
     
-    void runLeftovers()
+    inline void runLeftovers()
     {
         // Process any leftover messages
         std::lock_guard<std::mutex> lock(messageMutex);
@@ -315,7 +316,7 @@ private:
         CallableMessage(const TCallable& initCallableObject)
             : callableObject(initCallableObject)
         {}
-        void call() override
+        inline void call() override
         {
             callableObject();
         }
@@ -332,7 +333,7 @@ private:
             : callableObject(initCallableObject)
             , waitablePromise(std::move(initWaitablePromise))
         {}
-        void call() override
+        inline void call() override
         {
             actualCall<TReturn>();
         }
@@ -347,7 +348,7 @@ private:
         }
         
         template<>
-        void actualCall<void>()
+        inline void actualCall<void>()
         {
             callableObject();
             waitablePromise.set_value();
@@ -377,14 +378,14 @@ public:
     
     /// @brief start the thread and it's run-loop
     /// @warning calling this method will efectivelly block current thread
-    void start() override
+    inline void start() override
     {
         runLoop();
     }
 
     /// @brief signal the thread to stop - this also stops receiving messages
     /// @warning if a message is sent after calling this method an exception will be thrown
-    void stop() override
+    inline void stop() override
     {
         setIsAcceptingMessages(false);
         setIsRunning(false);
