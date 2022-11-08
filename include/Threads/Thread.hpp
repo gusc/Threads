@@ -318,7 +318,14 @@ private:
         {}
         inline void call() override
         {
-            callableObject();
+            try
+            {
+                callableObject();
+            }
+            catch(...)
+            {
+                // We can't do nothing as nobody is listening, but we don't want the thread to explode
+            }
         }
     private:
         TCallable callableObject;
@@ -344,7 +351,21 @@ private:
         template<typename TR>
         void actualCall()
         {
-            waitablePromise.set_value(callableObject());
+            try
+            {
+                waitablePromise.set_value(callableObject());
+            }
+            catch(...)
+            {
+                try
+                {
+                    waitablePromise.set_exception(std::current_exception());
+                }
+                catch(...)
+                {
+                    // We can't do nothing as nobody is listening, but we don't want the thread to explode
+                }
+            }
         }
         
         template<>
