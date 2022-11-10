@@ -24,6 +24,7 @@ namespace gusc::Threads
 /// @brief Class representing a new thread
 class Thread
 {
+    class Message;
     class DelayedMessageWrapper;
     
 public:
@@ -89,7 +90,6 @@ public:
         if (thread)
         {
             std::lock_guard<std::mutex> lock(messageMutex);
-            setIsAcceptingMessages(false);
             setIsRunning(false);
             queueWait.notify_one();
         }
@@ -460,6 +460,7 @@ public:
     /// @warning calling this method will efectivelly block current thread
     inline void start() override
     {
+        setIsRunning(true);
         runLoop();
     }
 
@@ -467,7 +468,6 @@ public:
     /// @warning if a message is sent after calling this method an exception will be thrown
     inline void stop() override
     {
-        setIsAcceptingMessages(false);
         setIsRunning(false);
     }
 };
