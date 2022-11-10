@@ -123,6 +123,7 @@ public:
     
     /// @brief send a delayed message that needs to be executed on this thread
     /// @param newMessage - any callable object that will be executed on this thread
+    /// @return a weak pointer to Cancellable object which allows you to cancel delayed task before it's timeout has expired
     template<typename TCallable>
     inline std::weak_ptr<Cancellable> sendDelayed(const TCallable& newMessage, const std::chrono::milliseconds& timeout)
     {
