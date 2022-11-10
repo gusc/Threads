@@ -13,16 +13,10 @@
 #include <atomic>
 #include <chrono>
 #include <queue>
-#include <map>
+#include <set>
 #include <mutex>
 #include <utility>
 #include <future>
-#include <iostream>
-
-namespace
-{
-constexpr const std::size_t MaxSpinCycles { 1000 };
-}
 
 namespace gusc::Threads
 {
@@ -30,7 +24,35 @@ namespace gusc::Threads
 /// @brief Class representing a new thread
 class Thread
 {
+    class Message;
+    class DelayedMessageWrapper;
+    
 public:
+    /// @brief Class representing a handle to delayed task and allows to check whether the task has executed and also cancel it prior it's moved to main message queue.
+    class CancellableMessage
+    {
+    public:
+        CancellableMessage() = default;
+        CancellableMessage(std::weak_ptr<DelayedMessageWrapper> initMessage)
+            : message(initMessage)
+        {}
+        /// @brief cancel the delayed task
+        inline void cancel() noexcept
+        {
+            if (auto m = message.lock())
+            {
+                m->cancel();
+            }
+        }
+        /// @brief check if task was executed (i.e. it's moved to main message queue)
+        inline bool isExecuted() const noexcept
+        {
+            return message.expired();
+        }
+    private:
+        std::weak_ptr<DelayedMessageWrapper> message;
+    };
+    
     Thread() = default;
     Thread(const Thread&) = delete;
     Thread& operator=(const Thread&) = delete;
@@ -52,6 +74,7 @@ public:
     {
         if (!getIsRunning())
         {
+            setIsAcceptingMessages(true);
             setIsRunning(true);
             thread = std::make_unique<std::thread>(&Thread::runLoop, this);
         }
@@ -68,8 +91,8 @@ public:
         if (thread)
         {
             std::lock_guard<std::mutex> lock(messageMutex);
-            setIsAcceptingMessages(false);
             setIsRunning(false);
+            setIsAcceptingMessages(false);
             queueWait.notify_one();
         }
         else
@@ -106,15 +129,18 @@ public:
     
     /// @brief send a delayed message that needs to be executed on this thread
     /// @param newMessage - any callable object that will be executed on this thread
+    /// @return a CancellableMessage object which allows you to cancel delayed task before it's timeout has expired
+    /// @note once the message is moved from delayed queue to message queue it's CancellableMessage object be expired and won't be cancellable any more
     template<typename TCallable>
-    inline void sendDelayed(const TCallable& newMessage, const std::chrono::milliseconds& timeout)
+    inline CancellableMessage sendDelayed(const TCallable& newMessage, const std::chrono::milliseconds& timeout)
     {
         if (getIsAcceptingMessages())
         {
             std::lock_guard<std::mutex> lock(messageMutex);
             auto time = std::chrono::steady_clock::now() + timeout;
-            delayedQueue.emplace(time, std::make_unique<CallableMessage<TCallable>>(newMessage));
+            auto ref = delayedQueue.emplace(std::make_shared<DelayedMessageWrapper>(time, std::make_unique<CallableMessage<TCallable>>(newMessage)));
             queueWait.notify_one();
+            return CancellableMessage{*ref};
         }
         else
         {
@@ -198,55 +224,53 @@ protected:
         {
             std::unique_ptr<Message> next;
             {
-                const auto timeNow = std::chrono::steady_clock::now();
                 std::unique_lock<std::mutex> lock(messageMutex);
-                // Wait for any messages to arrive
-                if (messageQueue.empty() && delayedQueue.empty())
-                {
-                    // We wait for a new message to be pushed on any of the queues
-                    queueWait.wait(lock);
-                }
                 // Move delayed messages to main queue
-                if (!delayedQueue.empty())
-                {
-                    auto hasNew { false };
-                    for (auto it = delayedQueue.begin(); it != delayedQueue.end();)
-                    {
-                        if (it->first < timeNow)
-                        {
-                            messageQueue.emplace(std::move(it->second));
-                            it = delayedQueue.erase(it);
-                            hasNew = true;
-                        }
-                        else
-                        {
-                            break;
-                        }
-                    }
-                    if (!hasNew)
-                    {
-                        // If there are queued items but none were added to the queue wait till next queued item
-                        auto nextTime = delayedQueue.lower_bound(timeNow);
-                        if (nextTime != delayedQueue.end())
-                        {
-                            queueWait.wait_until(lock, nextTime->first);
-                        }
-                    }
-                }
+                enqueueDelayedMessages();
                 // Get the next message from the main queue
                 if (!messageQueue.empty())
                 {
                     next = std::move(messageQueue.front());
                     messageQueue.pop();
                 }
+                else if (!delayedQueue.empty())
+                {
+                    // There are no messages to process, but delayedQueue had some messages, we can wait till delay expires
+                    queueWait.wait_until(lock, (*delayedQueue.begin())->getTime());
+                }
+                else
+                {
+                    // We wait for a new message to be pushed on any of the queues
+                    queueWait.wait(lock);
+                }
             }
             if (next)
             {
-                missCounter = 0;
                 next->call();
             }
         }
         runLeftovers();
+    }
+    
+    inline void enqueueDelayedMessages()
+    {
+        const auto timeNow = std::chrono::steady_clock::now();
+        for (auto it = delayedQueue.begin(); it != delayedQueue.end();)
+        {
+            if ((*it)->getTime() < timeNow)
+            {
+                auto ptr = (*it)->getMessage();
+                if (ptr)
+                {
+                    messageQueue.emplace(std::move(ptr));
+                }
+                it = delayedQueue.erase(it);
+            }
+            else
+            {
+                break;
+            }
+        }
     }
     
     inline void runLeftovers()
@@ -374,14 +398,51 @@ private:
             callableObject();
             waitablePromise.set_value();
         }
-        
     };
     
-    std::size_t missCounter { 0 };
+    /// @brief templated message to wrap a callable object
+    class DelayedMessageWrapper
+    {
+    public:
+        DelayedMessageWrapper(std::chrono::time_point<std::chrono::steady_clock> initTime,
+                              std::unique_ptr<Message> initMessage)
+            : time(initTime)
+            , message(std::move(initMessage))
+        {}
+        inline bool operator<(const DelayedMessageWrapper& other)
+        {
+            return time < other.getTime();
+        }
+        inline void cancel() noexcept
+        {
+            isCancelled = true;
+        }
+        inline bool getIsCancelled() const noexcept
+        {
+            return isCancelled;
+        }
+        inline std::unique_ptr<Message> getMessage()
+        {
+            if (getIsCancelled())
+            {
+                return nullptr;
+            }
+            return std::move(message);
+        }
+        inline std::chrono::time_point<std::chrono::steady_clock> getTime() const noexcept
+        {
+            return time;
+        }
+    private:
+        std::atomic_bool isCancelled { false };
+        const std::chrono::time_point<std::chrono::steady_clock> time {};
+        std::unique_ptr<Message> message;
+    };
+
     std::atomic<bool> isRunning { false };
     std::atomic<bool> isAcceptingMessages { true };
     std::queue<std::unique_ptr<Message>> messageQueue;
-    std::map<std::chrono::time_point<std::chrono::steady_clock>, std::unique_ptr<Message>> delayedQueue;
+    std::multiset<std::shared_ptr<DelayedMessageWrapper>> delayedQueue;
     std::unique_ptr<std::thread> thread;
     std::condition_variable queueWait;
     std::mutex messageMutex;
@@ -401,6 +462,8 @@ public:
     /// @warning calling this method will efectivelly block current thread
     inline void start() override
     {
+        setIsAcceptingMessages(true);
+        setIsRunning(true);
         runLoop();
     }
 
@@ -408,8 +471,8 @@ public:
     /// @warning if a message is sent after calling this method an exception will be thrown
     inline void stop() override
     {
-        setIsAcceptingMessages(false);
         setIsRunning(false);
+        setIsAcceptingMessages(false);
     }
 };
     
