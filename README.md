@@ -21,7 +21,7 @@ This gives you options to post worker functions to be executed in different thre
 `Thread` methods:
 
 * `void send(const TCallable&)` - place a callabable object on the message queue
-* `void sendDelayed(const TCallable&, const std::chrono:milliseconds&)` - place a callabable object on the message queue and execute it after set delay time has elapsed
+* `CancellableMessage sendDelayed(const TCallable&, const std::chrono:milliseconds&)` - place a callabable object on the message queue and execute it after set delay time has elapsed (this method also returns a CancellableMessage object that allows to cancel the message while it's delay hasn't elapsed).
 * `std::future<TReturn> sendAsync<TReturn>(const TCallable&)` - place a callabable object that can return value asynchronously on the message queue
 * `TReturn sendSync<TReturn>(const TCallable&)` - place a callabable object that can return value synchronously on the message queue (this blocks calling thread until the callable finishes and returns)
 * `void sendWait(const TCallable&)` - place a callable object on the message queue and block until it's executed

@@ -74,6 +74,7 @@ public:
     {
         if (!getIsRunning())
         {
+            setIsAcceptingMessages(true);
             setIsRunning(true);
             thread = std::make_unique<std::thread>(&Thread::runLoop, this);
         }
@@ -91,6 +92,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(messageMutex);
             setIsRunning(false);
+            setIsAcceptingMessages(false);
             queueWait.notify_one();
         }
         else
@@ -460,6 +462,7 @@ public:
     /// @warning calling this method will efectivelly block current thread
     inline void start() override
     {
+        setIsAcceptingMessages(true);
         setIsRunning(true);
         runLoop();
     }
@@ -469,6 +472,7 @@ public:
     inline void stop() override
     {
         setIsRunning(false);
+        setIsAcceptingMessages(false);
     }
 };
     
