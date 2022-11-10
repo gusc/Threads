@@ -13,7 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <queue>
-#include <map>
+#include <set>
 #include <mutex>
 #include <utility>
 #include <future>
@@ -31,6 +31,23 @@ namespace gusc::Threads
 class Thread
 {
 public:
+    
+    class Cancellable
+    {
+    public:
+        inline void cancel() noexcept
+        {
+            isCancelled = true;
+        }
+    protected:
+        inline bool getIsCancelled() const noexcept
+        {
+            return isCancelled;
+        }
+    private:
+        std::atomic_bool isCancelled { false };
+    };
+    
     Thread() = default;
     Thread(const Thread&) = delete;
     Thread& operator=(const Thread&) = delete;
@@ -107,14 +124,15 @@ public:
     /// @brief send a delayed message that needs to be executed on this thread
     /// @param newMessage - any callable object that will be executed on this thread
     template<typename TCallable>
-    inline void sendDelayed(const TCallable& newMessage, const std::chrono::milliseconds& timeout)
+    inline std::weak_ptr<Cancellable> sendDelayed(const TCallable& newMessage, const std::chrono::milliseconds& timeout)
     {
         if (getIsAcceptingMessages())
         {
             std::lock_guard<std::mutex> lock(messageMutex);
             auto time = std::chrono::steady_clock::now() + timeout;
-            delayedQueue.emplace(time, std::make_unique<CallableMessage<TCallable>>(newMessage));
+            auto ref = delayedQueue.emplace(std::make_shared<DelayedMessageWrapper>(time, std::make_unique<CallableMessage<TCallable>>(newMessage)));
             queueWait.notify_one();
+            return *ref;
         }
         else
         {
@@ -212,9 +230,13 @@ protected:
                     auto hasNew { false };
                     for (auto it = delayedQueue.begin(); it != delayedQueue.end();)
                     {
-                        if (it->first < timeNow)
+                        if ((*it)->getTime() < timeNow)
                         {
-                            messageQueue.emplace(std::move(it->second));
+                            auto ptr = (*it)->getMessage();
+                            if (ptr)
+                            {
+                                messageQueue.emplace(std::move(ptr));
+                            }
                             it = delayedQueue.erase(it);
                             hasNew = true;
                         }
@@ -226,10 +248,14 @@ protected:
                     if (!hasNew)
                     {
                         // If there are queued items but none were added to the queue wait till next queued item
-                        auto nextTime = delayedQueue.lower_bound(timeNow);
+                        auto nextTime = std::lower_bound(delayedQueue.begin(), delayedQueue.end(), timeNow,
+                                                         [](const std::shared_ptr<DelayedMessageWrapper>& a,
+                                                            const std::chrono::time_point<std::chrono::steady_clock>& b){
+                            return a->getTime() < b;
+                        });
                         if (nextTime != delayedQueue.end())
                         {
-                            queueWait.wait_until(lock, nextTime->first);
+                            queueWait.wait_until(lock, (*nextTime)->getTime());
                         }
                     }
                 }
@@ -331,6 +357,36 @@ private:
         TCallable callableObject;
     };
     
+    /// @brief templated message to wrap a callable object
+    class DelayedMessageWrapper : public Cancellable
+    {
+    public:
+        DelayedMessageWrapper(std::chrono::time_point<std::chrono::steady_clock> initTime,
+                              std::unique_ptr<Message> initMessage)
+            : time(initTime)
+            , message(std::move(initMessage))
+        {}
+        bool operator<(const DelayedMessageWrapper& other)
+        {
+            return time < other.getTime();
+        }
+        inline std::unique_ptr<Message> getMessage()
+        {
+            if (getIsCancelled())
+            {
+                return nullptr;
+            }
+            return std::move(message);
+        }
+        inline std::chrono::time_point<std::chrono::steady_clock> getTime() const noexcept
+        {
+            return time;
+        }
+    private:
+        std::chrono::time_point<std::chrono::steady_clock> time {};
+        std::unique_ptr<Message> message;
+    };
+    
     /// @brief templated message to wrap a callable object which accepts promise object that can be used to signal finish of the callable (useful for subsequent async calls)
     template<typename TReturn, typename TCallable>
     class CallableMessageWithPromise : public Message
@@ -381,7 +437,7 @@ private:
     std::atomic<bool> isRunning { false };
     std::atomic<bool> isAcceptingMessages { true };
     std::queue<std::unique_ptr<Message>> messageQueue;
-    std::map<std::chrono::time_point<std::chrono::steady_clock>, std::unique_ptr<Message>> delayedQueue;
+    std::multiset<std::shared_ptr<DelayedMessageWrapper>> delayedQueue;
     std::unique_ptr<std::thread> thread;
     std::condition_variable queueWait;
     std::mutex messageMutex;
