@@ -25,7 +25,6 @@ namespace gusc::Threads
 class Thread
 {
     class Task;
-    class DelayedTaskWrapper;
     
 public:
     /// @brief Class representing a handle to delayed task and allows to check whether the task has executed and also cancel it prior it's moved to main task queue.
@@ -36,6 +35,7 @@ public:
         TaskHandle(std::weak_ptr<Task> initTask)
             : task(initTask)
         {}
+        virtual ~TaskHandle() = default;
         /// @brief cancel the delayed task
         inline void cancel() noexcept
         {
@@ -51,6 +51,40 @@ public:
         }
     private:
         std::weak_ptr<Task> task;
+    };
+    
+    template<typename TReturn>
+    class TaskHandleWithFuture : public TaskHandle
+    {
+    public:
+        TaskHandleWithFuture(std::weak_ptr<Task> initTask, std::future<TReturn> initFuture)
+            : TaskHandle(initTask)
+            , future(std::move(initFuture))
+        {}
+        
+        TReturn getValue()
+        {
+            return future.get();
+        }
+    private:
+        std::future<TReturn> future;
+    };
+    
+    template<>
+    class TaskHandleWithFuture<void> : public TaskHandle
+    {
+    public:
+        TaskHandleWithFuture(std::weak_ptr<Task> initTask, std::future<void> initFuture)
+            : TaskHandle(initTask)
+            , future(std::move(initFuture))
+        {}
+        
+        void getValue()
+        {
+            future.get();
+        }
+    private:
+        std::future<void> future;
     };
     
     Thread() = default;
@@ -154,25 +188,26 @@ public:
     /// @note if sent from the same thread this method will call the callable immediatelly to prevent deadlocking
     /// @param newTask - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
     template<typename TReturn, typename TCallable>
-    inline std::future<TReturn> sendAsync(const TCallable& newTask)
+    inline TaskHandleWithFuture<TReturn> sendAsync(const TCallable& newTask)
     {
         if (getIsAcceptingTasks())
         {
             std::promise<TReturn> promise;
-            std::future<TReturn> future = promise.get_future();
+            auto future = promise.get_future();
+            auto task = std::make_shared<TaskWithPromise<TReturn, TCallable>>(newTask, std::move(promise));
+            TaskHandleWithFuture<TReturn> handle(task, std::move(future));
             if (getIsSameThread())
             {
                 // If we are on the same thread excute task immediatelly to prent a deadlock
-                auto task = std::make_shared<TaskWithPromise<TReturn, TCallable>>(newTask, std::move(promise));
                 task->execute();
             }
             else
             {
                 std::lock_guard<std::mutex> lock(mutex);
-                taskQueue.emplace(std::make_shared<TaskWithPromise<TReturn, TCallable>>(newTask, std::move(promise)));
+                taskQueue.emplace(task);
                 queueWait.notify_one();
             }
-            return future;
+            return handle;
         }
         else
         {
@@ -190,8 +225,8 @@ public:
         {
             throw std::runtime_error("Can not place a blocking task if the thread is not started");
         }
-        auto future = sendAsync<TReturn>(newTask);
-        return future.get();
+        auto handle = sendAsync<TReturn>(newTask);
+        return handle.getValue();
     }
     
     /// @brief send a task that needs to be executed on this thread and wait for it's completion
