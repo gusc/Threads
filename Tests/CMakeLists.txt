@@ -5,6 +5,8 @@ set(SOURCES
 	"main.cpp"
 	"SignalTests.hpp"
 	"SignalTests.cpp"
+    "TaskQueueTests.hpp"
+    "TaskQueueTests.cpp"
 	"ThreadTests.hpp"
 	"ThreadTests.cpp"
 	"Utilities.hpp"

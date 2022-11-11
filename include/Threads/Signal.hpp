@@ -76,7 +76,7 @@ class Signal
             }
             else
             {
-                hostThread->send(SignalMessage{callback, args...});
+                hostThread->run(SignalMessage{callback, args...});
             }
         }
         
@@ -261,7 +261,7 @@ class Signal<void>
             }
             else
             {
-                hostThread->send(callback);
+                hostThread->run(callback);
             }
         }
         

@@ -5,41 +5,34 @@ If you wish to:
 * run a function on a specific thread 
 * run callbacks that each are assigned to a different thread with thread affinity check
 * have greater control over which code accesses which data in which thread
+* post tasks on queues associated with threads
 
 Then this is the library for you!
 
 This is a C++17 library that provides threads with message queues and signal mechanism with full control in which thread the signal's listener will be executed.
 
-## Thread with a message queue
+## Thread class
 
-Library provides an `std::thread` wrapper with an internal run-loop and a message queue. Whenever a message object get's sent to the thread, it's placed on a message queue and when time comes it's `operator()` method is executed in that thread.
+Library provides an `std::thread` wrapper with an internal run-loop and a callable object queue. Whenever a callable object get's sent to the thread, it's placed on a queue and when time comes it's `operator()` method is executed in that thread.
 
 This gives you options to post worker functions to be executed in different threads.
 
-### Thread class
-
 `Thread` methods:
 
-* `void send(const TCallable&)` - place a callabable object on the message queue
-* `CancellableMessage sendDelayed(const TCallable&, const std::chrono:milliseconds&)` - place a callabable object on the message queue and execute it after set delay time has elapsed (this method also returns a CancellableMessage object that allows to cancel the message while it's delay hasn't elapsed).
-* `std::future<TReturn> sendAsync<TReturn>(const TCallable&)` - place a callabable object that can return value asynchronously on the message queue
-* `TReturn sendSync<TReturn>(const TCallable&)` - place a callabable object that can return value synchronously on the message queue (this blocks calling thread until the callable finishes and returns)
-* `void sendWait(const TCallable&)` - place a callable object on the message queue and block until it's executed
-* `void start()` - start running the thread (also automatically start run-loop)
-* `void stop()` - signal the thread to stop - this will make the thread stop accepting new messages, but it will still continue processing messages in the queue
+* `void run(const TCallable&)` - place a callabable object on the runnable queue (the thread must be started!)
+* `void start()` - start running the thread, also start accepting new runnables
+* `void stop()` - signal the thread to stop - this will make the thread stop accepting new runnables, but it will still continue processing messages in the queue
 * `void join()` - wait for the thread to finish
 
 `Thread` class automatically joins on destruction.
 
-*Blocking call warning*: Sending a blocking message on a thread that is not started will result in an exception!
-
-### ThisThread class
+## ThisThread class
 
 Additionally library provides a `ThisThread` class to execute run-loop on current thread. This is intended to be used only on a main thread or any other thread that was not started by `Thread` class.
 
 `ThisThread` extends from `Thread` and starts run loop when `start()` is called effectivelly blocking current thread until someone calls `stop()` (which can be done either through a message or before calling `start()`).
 
-### Examples
+## Examples
 
 This will make the each lambda run on a different thread:
 
@@ -56,7 +49,75 @@ This will make the each lambda run on a different thread:
     th2.start();
     
     // Place messages on both threads
-    th1.send([](){
+    th1.run([](){
+        auto id = std::this_thread::get_id();
+        std::cout << "This is a worker on thread ID: " << id << std::endl;
+    });
+    
+    th2.run([](){
+        auto id = std::this_thread::get_id();
+        std::cout << "This is a worker on thread ID: " << id << std::endl;
+    });
+    
+    // Both threads will be joined up on thread object destruction
+}
+```
+
+Example with `ThisThread` - this will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.stop()` call.
+
+```c++
+gusc::Threads::ThisThread mt;
+
+mt.run([&mt](){
+    auto id = std::this_thread::get_id();
+    std::cout << "This is a worker on thread ID: " << id << std::endl;
+    
+    // You can quit the main thread run-loop from anywhere
+    mt.stop();
+});
+
+// Start the run-loop
+mt.start();
+```
+
+## Task Queue
+
+This library provides a task queue which allows posting more complex tasks on a thread that includes:
+
+* tasks that are simply run whenever thread becomes free
+* tasks that return a handle from which you can cancel, check if task has executed and even get an asychronous results
+* tasks that can block current thread and wait until it's executed 
+
+`TaskQueue` methods:
+
+* `void send(const TCallable&)` - place a callabable object on the task queue
+* `TaskHandle sendDelayed(const TCallable&, const std::chrono:milliseconds&)` - place a callabable object on the message queue and execute it after set delay time has elapsed (this method also returns a `TaskHandle` object that allows to cancel the message while it's delay hasn't elapsed).
+* `TaskHandleWithResult<TReturn> sendAsync<TReturn>(const TCallable&)` - place a callabable object that can return value asynchronously on the task queue (this message return `TaskHandleWithResult<TReturn>` - similar to `TaskHandle`, but it can also be use to block current thread until the task has finished or exception has occured.
+* `TReturn sendSync<TReturn>(const TCallable&)` - place a callabable object that can return value synchronously on the task queue (this blocks calling thread until the callable finishes and returns)
+* `void sendWait(const TCallable&)` - place a callable object on the task queue and block until it's executed
+* `void start()` - start running the task queue
+* `void stop()` - signal the thread to stop - this will make the task queue stop accepting new messages, but it will still continue processing messages in the queue
+
+`TaskQueue` class always finishes all the tasks on the queue on destruction and cancels all the delayed tasks.
+
+*Blocking call warning*: Sending a blocking message on a task queue that is not started will result in an exception!
+
+## Examples
+
+This will make the each lambda run on a different thread:
+
+```c++
+{
+    gusc::Threads::TaskQueue tq;
+    
+    auto id = std::this_thread::get_id();
+    std::cout << "Main thread ID: " << id << std::endl;
+    
+    // You have to start threads to process all the messages
+    tq.start();
+    
+    // Place messages on both threads
+    tq.send([](){
         auto id = std::this_thread::get_id();
         std::cout << "This is a worker on thread ID: " << id << std::endl;
     });
@@ -80,27 +141,8 @@ This will make the each lambda run on a different thread:
     auto f = th2.sendAsync<bool>([]() -> bool {
         return true;
     });
-    auto result2 = f.get();
-    
-    // Both threads will be joined up on thread object destruction
+    auto result2 = f.getValue();
 }
-```
-
-Example with `ThisThread` - this will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.stop()` call.
-
-```c++
-gusc::Threads::ThisThread mt;
-
-mt.send([&mt](){
-    auto id = std::this_thread::get_id();
-    std::cout << "This is a worker on thread ID: " << id << std::endl;
-    
-    // You can quit the main thread run-loop from anywhere
-    mt.stop();
-});
-
-// Start the run-loop
-mt.start();
 ```
 
 ## Signals with listener slots

@@ -7,10 +7,12 @@
 //
 
 #include "ThreadTests.hpp"
+#include "TaskQueueTests.hpp"
 #include "SignalTests.hpp"
 
 int main(int argc, const char * argv[]) {
     runThreadTests();
+    runTaskQueueTests();
     runSignalTests();
     return 0;
 }

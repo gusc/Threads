@@ -199,13 +199,14 @@ void runSignalTests()
     });
     
     t1.start();
-    mt.sendDelayed([&](){
+    // Stop main thread runloop aswell
+    mt.run([&](){
         mt.stop();
-    }, 5s);
-    mt.stop();
+    });
     mt.start();
     t1.stop();
-    t1.join(); // Let this thread finish up
+    // Let this thread finish up
+    t1.join();
     
     // Disconnect
     sigSimple.disconnect(&mt, &simpleFunction);
