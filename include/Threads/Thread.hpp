@@ -33,7 +33,7 @@ public:
     {
     public:
         TaskHandle() = default;
-        TaskHandle(std::weak_ptr<DelayedTaskWrapper> initTask)
+        TaskHandle(std::weak_ptr<Task> initTask)
             : task(initTask)
         {}
         /// @brief cancel the delayed task
@@ -50,7 +50,7 @@ public:
             return task.expired();
         }
     private:
-        std::weak_ptr<DelayedTaskWrapper> task;
+        std::weak_ptr<Task> task;
     };
     
     Thread() = default;
@@ -118,7 +118,7 @@ public:
         if (getIsAcceptingTasks())
         {
             std::lock_guard<std::mutex> lock(mutex);
-            taskQueue.emplace(std::make_unique<TaskWithCallable<TCallable>>(newTask));
+            taskQueue.emplace(std::make_shared<TaskWithCallable<TCallable>>(newTask));
             queueWait.notify_one();
         }
         else
@@ -138,9 +138,11 @@ public:
         {
             std::lock_guard<std::mutex> lock(mutex);
             auto time = std::chrono::steady_clock::now() + timeout;
-            auto ref = delayedQueue.emplace(std::make_shared<DelayedTaskWrapper>(time, std::make_unique<TaskWithCallable<TCallable>>(newTask)));
+            auto task = std::make_shared<TaskWithCallable<TCallable>>(newTask);
+            TaskHandle handle { task };
+            delayedQueue.emplace(std::make_unique<DelayedTaskWrapper>(time, std::move(task)));
             queueWait.notify_one();
-            return TaskHandle{*ref};
+            return handle;
         }
         else
         {
@@ -161,13 +163,13 @@ public:
             if (getIsSameThread())
             {
                 // If we are on the same thread excute task immediatelly to prent a deadlock
-                auto task = std::make_unique<TaskWithPromise<TReturn, TCallable>>(newTask, std::move(promise));
+                auto task = std::make_shared<TaskWithPromise<TReturn, TCallable>>(newTask, std::move(promise));
                 task->execute();
             }
             else
             {
                 std::lock_guard<std::mutex> lock(mutex);
-                taskQueue.emplace(std::make_unique<TaskWithPromise<TReturn, TCallable>>(newTask, std::move(promise)));
+                taskQueue.emplace(std::make_shared<TaskWithPromise<TReturn, TCallable>>(newTask, std::move(promise)));
                 queueWait.notify_one();
             }
             return future;
@@ -222,7 +224,7 @@ protected:
     {
         while (getIsRunning())
         {
-            std::unique_ptr<Task> next;
+            std::shared_ptr<Task> next;
             {
                 std::unique_lock<std::mutex> lock(mutex);
                 // Move delayed tasks to main queue
@@ -259,7 +261,7 @@ protected:
         {
             if ((*it)->getTime() < timeNow)
             {
-                auto ptr = (*it)->getTask();
+                auto ptr = (*it)->moveTask();
                 if (ptr)
                 {
                     taskQueue.emplace(std::move(ptr));
@@ -448,7 +450,7 @@ private:
     {
     public:
         DelayedTaskWrapper(std::chrono::time_point<std::chrono::steady_clock> initTime,
-                           std::unique_ptr<Task> initTask)
+                           std::shared_ptr<Task> initTask)
             : time(initTime)
             , task(std::move(initTask))
         {}
@@ -456,17 +458,8 @@ private:
         {
             return time < other.getTime();
         }
-        inline void cancel() noexcept
+        inline std::shared_ptr<Task> moveTask()
         {
-            const std::lock_guard<decltype(mutex)> lock(mutex);
-            if (task)
-            {
-                task->cancel();
-            }
-        }
-        inline std::unique_ptr<Task> getTask()
-        {
-            const std::lock_guard<decltype(mutex)> lock(mutex);
             return std::move(task);
         }
         inline std::chrono::time_point<std::chrono::steady_clock> getTime() const noexcept
@@ -474,15 +467,14 @@ private:
             return time;
         }
     private:
-        std::recursive_mutex mutex;
         const std::chrono::time_point<std::chrono::steady_clock> time {};
-        std::unique_ptr<Task> task;
+        std::shared_ptr<Task> task;
     };
 
     std::atomic<bool> isRunning { false };
     std::atomic<bool> isAcceptingTasks { true };
-    std::queue<std::unique_ptr<Task>> taskQueue;
-    std::multiset<std::shared_ptr<DelayedTaskWrapper>> delayedQueue;
+    std::queue<std::shared_ptr<Task>> taskQueue;
+    std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
     std::unique_ptr<std::thread> thread;
     std::condition_variable queueWait;
     std::mutex mutex;
