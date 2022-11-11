@@ -9,10 +9,7 @@
 #ifndef TaskQueue_hpp
 #define TaskQueue_hpp
 
-#include <thread>
-#include <atomic>
-#include <chrono>
-#include <queue>
+#include "Thread.hpp"
 #include <set>
 #include <mutex>
 #include <utility>
@@ -87,69 +84,27 @@ public:
         std::future<void> future;
     };
     
-    TaskQueue() = default;
+    TaskQueue()
+    {
+        thread.start();
+        thread.run(std::bind(&TaskQueue::runLoop, this));
+    };
     TaskQueue(const TaskQueue&) = delete;
     TaskQueue& operator=(const TaskQueue&) = delete;
     TaskQueue(TaskQueue&&) = delete;
     TaskQueue& operator=(TaskQueue&&) = delete;
     virtual ~TaskQueue()
     {
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            setIsAcceptingTasks(false);
-            setIsRunning(false);
-            queueWait.notify_one();
-        }
-        join();
+        isRunning = false;
+        queueWait.notify_all();
     }
-    
-    /// @brief start the thread and it's run-loop
-    virtual inline void start()
-    {
-        if (!getIsRunning())
-        {
-            setIsAcceptingTasks(true);
-            setIsRunning(true);
-            thread = std::make_unique<std::thread>(&TaskQueue::runLoop, this);
-        }
-        else
-        {
-            throw std::runtime_error("Thread already started");
-        }
-    }
-    
-    /// @brief signal the thread to stop - this also stops receiving tasks
-    /// @warning if a task is sent after calling this method an exception will be thrown
-    virtual inline void stop()
-    {
-        if (thread)
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            setIsRunning(false);
-            setIsAcceptingTasks(false);
-            queueWait.notify_one();
-        }
-        else
-        {
-            throw std::runtime_error("Thread has not been started");
-        }
-    }
-    
-    /// @brief join the thread and wait unti it's finished
-    inline void join()
-    {
-        if (thread && thread->joinable())
-        {
-            thread->join();
-        }
-    }
-    
+
     /// @brief send a task that needs to be executed on this thread
     /// @param newTask - any callable object that will be executed on this thread
     template<typename TCallable>
     inline void send(const TCallable& newTask)
     {
-        if (getIsAcceptingTasks())
+        if (isRunning)
         {
             std::lock_guard<std::mutex> lock(mutex);
             taskQueue.emplace(std::make_shared<TaskWithCallable<TCallable>>(newTask));
@@ -157,7 +112,7 @@ public:
         }
         else
         {
-            throw std::runtime_error("Thread is not accepting any tasks, the thread has been signaled for stopping");
+            throw std::runtime_error("Task queue is not accepting any tasks, the thread has been signaled for stopping");
         }
     }
     
@@ -168,7 +123,7 @@ public:
     template<typename TCallable>
     inline TaskHandle sendDelayed(const TCallable& newTask, const std::chrono::milliseconds& timeout)
     {
-        if (getIsAcceptingTasks())
+        if (isRunning)
         {
             std::lock_guard<std::mutex> lock(mutex);
             auto time = std::chrono::steady_clock::now() + timeout;
@@ -180,7 +135,7 @@ public:
         }
         else
         {
-            throw std::runtime_error("Thread is not accepting any tasks, the thread has been signaled for stopping");
+            throw std::runtime_error("Task queue is not accepting any tasks, the thread has been signaled for stopping");
         }
     }
     
@@ -190,7 +145,7 @@ public:
     template<typename TReturn, typename TCallable>
     inline TaskHandleWithFuture<TReturn> sendAsync(const TCallable& newTask)
     {
-        if (getIsAcceptingTasks())
+        if (isRunning)
         {
             std::promise<TReturn> promise;
             auto future = promise.get_future();
@@ -211,7 +166,7 @@ public:
         }
         else
         {
-            throw std::runtime_error("Thread is not accepting any tasks, the thread has been signaled for stopping");
+            throw std::runtime_error("Task queue is not accepting any tasks, the thread has been signaled for stopping");
         }
     }
     
@@ -221,7 +176,7 @@ public:
     template<typename TReturn, typename TCallable>
     inline TReturn sendSync(const TCallable& newTask)
     {
-        if (!getIsRunning())
+        if (!isRunning)
         {
             throw std::runtime_error("Can not place a blocking task if the thread is not started");
         }
@@ -237,10 +192,10 @@ public:
         sendSync<void>(newTask);
     }
     
-protected:
+private:
     inline void runLoop()
     {
-        while (getIsRunning())
+        while (isRunning)
         {
             std::shared_ptr<Task> next;
             {
@@ -304,43 +259,9 @@ protected:
         }
     }
     
-    inline std::thread::id getId() const noexcept
-    {
-        if (thread)
-        {
-            return thread->get_id();
-        }
-        else
-        {
-            // We haven't started a thread yet, so we're the same thread
-            return std::this_thread::get_id();
-        }
-    }
-    
-    inline bool getIsRunning() const noexcept
-    {
-        return isRunning;
-    }
-
-    inline void setIsRunning(bool newIsRunning) noexcept
-    {
-        isRunning = newIsRunning;
-        queueWait.notify_one();
-    }
-    
-    inline bool getIsAcceptingTasks() const noexcept
-    {
-        return isAcceptingTasks;
-    }
-
-    inline void setIsAcceptingTasks(bool newIsAcceptingTasks) noexcept
-    {
-        isAcceptingTasks = newIsAcceptingTasks;
-    }
-    
     inline bool getIsSameThread() const noexcept
     {
-        return getId() == std::this_thread::get_id();
+        return thread.getId() == std::this_thread::get_id();
     }
 
 private:
@@ -489,14 +410,13 @@ private:
         const std::chrono::time_point<std::chrono::steady_clock> time {};
         std::shared_ptr<Task> task;
     };
-
-    std::atomic<bool> isRunning { false };
-    std::atomic<bool> isAcceptingTasks { true };
+    
+    std::mutex mutex;
+    std::atomic<bool> isRunning { true };
     std::queue<std::shared_ptr<Task>> taskQueue;
     std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
-    std::unique_ptr<std::thread> thread;
     std::condition_variable queueWait;
-    std::mutex mutex;
+    Thread thread;
 };
 
 }

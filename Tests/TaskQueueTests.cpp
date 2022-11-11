@@ -126,10 +126,6 @@ void runTaskQueueTests()
         tlog << ex.what();
     }
     
-    // Start all threads and main run-loop
-    t1.start();
-    t2.start();
-    
     // Test blocking calls
     t1.sendWait([](){
         tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
@@ -160,16 +156,9 @@ void runTaskQueueTests()
     tlog << "Sync and async results" << std::to_string(f1.getValue()) << std::to_string(f2.getValue()) << std::to_string(res1) << std::to_string(res2);
     tlog.flush();
     
-    t1.sendDelayed([&](){
-        tlog << "Stopping thread t1";
-        tlog.flush();
-        t1.stop();
-    }, 5s);
-    t2.sendDelayed([&](){
-        tlog << "Stopping thread t2";
-        tlog.flush();
-        t2.stop();
-    }, 5s);
+    std::this_thread::sleep_for(3s);
     
-    std::this_thread::sleep_for(6s);
+    // Task queue objects are destrouyed and their threads are stopped
+    tlog << "Finishing";
+    tlog.flush();
 }

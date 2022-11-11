@@ -29,6 +29,7 @@ public:
     Thread& operator=(Thread&&) = delete;
     virtual ~Thread()
     {
+        setIsRunning(false);
         join();
     }
     
@@ -102,6 +103,19 @@ public:
     {
         return !(operator==(other));
     }
+
+    inline std::thread::id getId() const noexcept
+    {
+        if (thread)
+        {
+            return thread->get_id();
+        }
+        else
+        {
+            // We haven't started a thread yet, so we're the same thread
+            return std::this_thread::get_id();
+        }
+    }
     
 protected:
     inline void runLoop()
@@ -140,19 +154,6 @@ protected:
         }
     }
     
-    inline std::thread::id getId() const noexcept
-    {
-        if (thread)
-        {
-            return thread->get_id();
-        }
-        else
-        {
-            // We haven't started a thread yet, so we're the same thread
-            return std::this_thread::get_id();
-        }
-    }
-    
     inline bool getIsRunning() const noexcept
     {
         return isRunning;
@@ -162,11 +163,6 @@ protected:
     {
         isRunning = newIsRunning;
         queueWait.notify_one();
-    }
-    
-    inline bool getIsSameThread() const noexcept
-    {
-        return getId() == std::this_thread::get_id();
     }
 
 private:
