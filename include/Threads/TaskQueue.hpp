@@ -85,10 +85,17 @@ public:
     };
     
     TaskQueue()
+        : TaskQueue(localThread)
+    {};
+    TaskQueue(Thread& initThread)
+        : thread(initThread)
     {
-        thread.start();
+        if (!thread.getIsRunning())
+        {
+            thread.start();
+        }
         thread.run(std::bind(&TaskQueue::runLoop, this));
-    };
+    }
     TaskQueue(const TaskQueue&) = delete;
     TaskQueue& operator=(const TaskQueue&) = delete;
     TaskQueue(TaskQueue&&) = delete;
@@ -416,7 +423,8 @@ private:
     std::queue<std::shared_ptr<Task>> taskQueue;
     std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
     std::condition_variable queueWait;
-    Thread thread;
+    Thread localThread;
+    Thread& thread;
 };
 
 }

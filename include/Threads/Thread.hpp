@@ -117,6 +117,11 @@ public:
         }
     }
     
+    inline bool getIsRunning() const noexcept
+    {
+        return isRunning;
+    }
+    
 protected:
     inline void runLoop()
     {
@@ -154,11 +159,6 @@ protected:
         }
     }
     
-    inline bool getIsRunning() const noexcept
-    {
-        return isRunning;
-    }
-
     inline void setIsRunning(bool newIsRunning) noexcept
     {
         isRunning = newIsRunning;

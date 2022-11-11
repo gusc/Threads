@@ -95,8 +95,7 @@ This library provides a task queue which allows posting more complex tasks on a 
 * `TaskHandleWithResult<TReturn> sendAsync<TReturn>(const TCallable&)` - place a callabable object that can return value asynchronously on the task queue (this message return `TaskHandleWithResult<TReturn>` - similar to `TaskHandle`, but it can also be use to block current thread until the task has finished or exception has occured.
 * `TReturn sendSync<TReturn>(const TCallable&)` - place a callabable object that can return value synchronously on the task queue (this blocks calling thread until the callable finishes and returns)
 * `void sendWait(const TCallable&)` - place a callable object on the task queue and block until it's executed
-* `void start()` - start running the task queue
-* `void stop()` - signal the thread to stop - this will make the task queue stop accepting new messages, but it will still continue processing messages in the queue
+queue
 
 `TaskQueue` class always finishes all the tasks on the queue on destruction and cancels all the delayed tasks.
 
