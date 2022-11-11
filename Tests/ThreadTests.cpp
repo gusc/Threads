@@ -141,6 +141,12 @@ void runThreadTests()
         tlog << ex.what();
     }
     
+    mt.sendDelayed([&](){
+        tlog << "Stopping thread mt";
+        tlog.flush();
+        mt.stop();
+    }, 5s);
+    
     // Signal main thread to quit (this effectivelly stops processing all the messages)
     mt.stop();
     // Start all threads and main run-loop
@@ -176,6 +182,17 @@ void runThreadTests()
     });
     tlog << "Sync and async results" << std::to_string(f1.get()) << std::to_string(f2.get()) << std::to_string(res1) << std::to_string(res2);
     tlog.flush();
+    
+    t1.sendDelayed([&](){
+        tlog << "Stopping thread t1";
+        tlog.flush();
+        t1.stop();
+    }, 5s);
+    t2.sendDelayed([&](){
+        tlog << "Stopping thread t2";
+        tlog.flush();
+        t2.stop();
+    }, 5s);
     
     mt.start();
     std::this_thread::sleep_for(3s);

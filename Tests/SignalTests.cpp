@@ -199,6 +199,9 @@ void runSignalTests()
     });
     
     t1.start();
+    mt.sendDelayed([&](){
+        mt.stop();
+    }, 5s);
     mt.stop();
     mt.start();
     t1.stop();
