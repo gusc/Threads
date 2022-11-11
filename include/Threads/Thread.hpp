@@ -24,33 +24,33 @@ namespace gusc::Threads
 /// @brief Class representing a new thread
 class Thread
 {
-    class Message;
-    class DelayedMessageWrapper;
+    class Task;
+    class DelayedTaskWrapper;
     
 public:
-    /// @brief Class representing a handle to delayed task and allows to check whether the task has executed and also cancel it prior it's moved to main message queue.
-    class CancellableMessage
+    /// @brief Class representing a handle to delayed task and allows to check whether the task has executed and also cancel it prior it's moved to main task queue.
+    class TaskHandle
     {
     public:
-        CancellableMessage() = default;
-        CancellableMessage(std::weak_ptr<DelayedMessageWrapper> initMessage)
-            : message(initMessage)
+        TaskHandle() = default;
+        TaskHandle(std::weak_ptr<DelayedTaskWrapper> initTask)
+            : task(initTask)
         {}
         /// @brief cancel the delayed task
         inline void cancel() noexcept
         {
-            if (auto m = message.lock())
+            if (auto t = task.lock())
             {
-                m->cancel();
+                t->cancel();
             }
         }
-        /// @brief check if task was executed (i.e. it's moved to main message queue)
+        /// @brief check if task was executed (i.e. it's moved to main task queue)
         inline bool isExecuted() const noexcept
         {
-            return message.expired();
+            return task.expired();
         }
     private:
-        std::weak_ptr<DelayedMessageWrapper> message;
+        std::weak_ptr<DelayedTaskWrapper> task;
     };
     
     Thread() = default;
@@ -61,8 +61,8 @@ public:
     virtual ~Thread()
     {
         {
-            std::lock_guard<std::mutex> lock(messageMutex);
-            setIsAcceptingMessages(false);
+            std::lock_guard<std::mutex> lock(mutex);
+            setIsAcceptingTasks(false);
             setIsRunning(false);
             queueWait.notify_one();
         }
@@ -74,7 +74,7 @@ public:
     {
         if (!getIsRunning())
         {
-            setIsAcceptingMessages(true);
+            setIsAcceptingTasks(true);
             setIsRunning(true);
             thread = std::make_unique<std::thread>(&Thread::runLoop, this);
         }
@@ -84,15 +84,15 @@ public:
         }
     }
     
-    /// @brief signal the thread to stop - this also stops receiving messages
-    /// @warning if a message is sent after calling this method an exception will be thrown
+    /// @brief signal the thread to stop - this also stops receiving tasks
+    /// @warning if a task is sent after calling this method an exception will be thrown
     virtual inline void stop()
     {
         if (thread)
         {
-            std::lock_guard<std::mutex> lock(messageMutex);
+            std::lock_guard<std::mutex> lock(mutex);
             setIsRunning(false);
-            setIsAcceptingMessages(false);
+            setIsAcceptingTasks(false);
             queueWait.notify_one();
         }
         else
@@ -110,94 +110,94 @@ public:
         }
     }
     
-    /// @brief send a message that needs to be executed on this thread
-    /// @param newMessage - any callable object that will be executed on this thread
+    /// @brief send a task that needs to be executed on this thread
+    /// @param newTask - any callable object that will be executed on this thread
     template<typename TCallable>
-    inline void send(const TCallable& newMessage)
+    inline void send(const TCallable& newTask)
     {
-        if (getIsAcceptingMessages())
+        if (getIsAcceptingTasks())
         {
-            std::lock_guard<std::mutex> lock(messageMutex);
-            messageQueue.emplace(std::make_unique<CallableMessage<TCallable>>(newMessage));
+            std::lock_guard<std::mutex> lock(mutex);
+            taskQueue.emplace(std::make_unique<TaskWithCallable<TCallable>>(newTask));
             queueWait.notify_one();
         }
         else
         {
-            throw std::runtime_error("Thread is not excepting any messages, the thread has been signaled for stopping");
+            throw std::runtime_error("Thread is not excepting any tasks, the thread has been signaled for stopping");
         }
     }
     
-    /// @brief send a delayed message that needs to be executed on this thread
-    /// @param newMessage - any callable object that will be executed on this thread
-    /// @return a CancellableMessage object which allows you to cancel delayed task before it's timeout has expired
-    /// @note once the message is moved from delayed queue to message queue it's CancellableMessage object be expired and won't be cancellable any more
+    /// @brief send a delayed task that needs to be executed on this thread
+    /// @param newTask - any callable object that will be executed on this thread
+    /// @return a TaskHandle object which allows you to cancel delayed task before it's timeout has expired
+    /// @note once the task is moved from delayed queue to task queue it's TaskHandle object be expired and won't be cancellable any more
     template<typename TCallable>
-    inline CancellableMessage sendDelayed(const TCallable& newMessage, const std::chrono::milliseconds& timeout)
+    inline TaskHandle sendDelayed(const TCallable& newTask, const std::chrono::milliseconds& timeout)
     {
-        if (getIsAcceptingMessages())
+        if (getIsAcceptingTasks())
         {
-            std::lock_guard<std::mutex> lock(messageMutex);
+            std::lock_guard<std::mutex> lock(mutex);
             auto time = std::chrono::steady_clock::now() + timeout;
-            auto ref = delayedQueue.emplace(std::make_shared<DelayedMessageWrapper>(time, std::make_unique<CallableMessage<TCallable>>(newMessage)));
+            auto ref = delayedQueue.emplace(std::make_shared<DelayedTaskWrapper>(time, std::make_unique<TaskWithCallable<TCallable>>(newTask)));
             queueWait.notify_one();
-            return CancellableMessage{*ref};
+            return TaskHandle{*ref};
         }
         else
         {
-            throw std::runtime_error("Thread is not excepting any messages, the thread has been signaled for stopping");
+            throw std::runtime_error("Thread is not excepting any tasks, the thread has been signaled for stopping");
         }
     }
     
-    /// @brief send an asynchronous message that returns value and needs to be executed on this thread (calling thread is not blocked)
+    /// @brief send an asynchronous task that returns value and needs to be executed on this thread (calling thread is not blocked)
     /// @note if sent from the same thread this method will call the callable immediatelly to prevent deadlocking
-    /// @param newMessage - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
+    /// @param newTask - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
     template<typename TReturn, typename TCallable>
-    inline std::future<TReturn> sendAsync(const TCallable& newMessage)
+    inline std::future<TReturn> sendAsync(const TCallable& newTask)
     {
-        if (getIsAcceptingMessages())
+        if (getIsAcceptingTasks())
         {
             std::promise<TReturn> promise;
             std::future<TReturn> future = promise.get_future();
             if (getIsSameThread())
             {
-                // If we are on the same thread excute message immediatelly to prent a deadlock
-                auto message = std::make_unique<CallableMessageWithPromise<TReturn, TCallable>>(newMessage, std::move(promise));
-                message->call();
+                // If we are on the same thread excute task immediatelly to prent a deadlock
+                auto task = std::make_unique<TaskWithPromise<TReturn, TCallable>>(newTask, std::move(promise));
+                task->execute();
             }
             else
             {
-                std::lock_guard<std::mutex> lock(messageMutex);
-                messageQueue.emplace(std::make_unique<CallableMessageWithPromise<TReturn, TCallable>>(newMessage, std::move(promise)));
+                std::lock_guard<std::mutex> lock(mutex);
+                taskQueue.emplace(std::make_unique<TaskWithPromise<TReturn, TCallable>>(newTask, std::move(promise)));
                 queueWait.notify_one();
             }
             return future;
         }
         else
         {
-            throw std::runtime_error("Thread is not excepting any messages, the thread has been signaled for stopping");
+            throw std::runtime_error("Thread is not excepting any tasks, the thread has been signaled for stopping");
         }
     }
     
-    /// @brief send a synchronous message that returns value and needs to be executed on this thread (calling thread is blocked until message returns)
+    /// @brief send a synchronous task that returns value and needs to be executed on this thread (calling thread is blocked until task returns)
     /// @note to prevent deadlocking this method throws exception if called before thread has started
-    /// @param newMessage - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
+    /// @param newTask - any callable object that will be executed on this thread and it must return a value of type specified in TReturn (signature: TReturn(void))
     template<typename TReturn, typename TCallable>
-    inline TReturn sendSync(const TCallable& newMessage)
+    inline TReturn sendSync(const TCallable& newTask)
     {
         if (!getIsRunning())
         {
-            throw std::runtime_error("Can not place a blocking message if the thread is not started");
+            throw std::runtime_error("Can not place a blocking task if the thread is not started");
         }
-        auto future = sendAsync<TReturn>(newMessage);
+        auto future = sendAsync<TReturn>(newTask);
         return future.get();
     }
     
-    /// @brief send a message that needs to be executed on this thread and wait for it's completion
-    /// @param newMessage - any callable object that will be executed on this thread
+    /// @brief send a task that needs to be executed on this thread and wait for it's completion
+    /// @param newTask - any callable object that will be executed on this thread
     template<typename TCallable>
-    inline void sendWait(const TCallable& newMessage)
+    inline void sendWait(const TCallable& newTask)
     {
-        sendSync<void>(newMessage);
+        sendSync<void>(newTask);
     }
         
     inline bool operator==(const Thread& other) const noexcept
@@ -222,47 +222,47 @@ protected:
     {
         while (getIsRunning())
         {
-            std::unique_ptr<Message> next;
+            std::unique_ptr<Task> next;
             {
-                std::unique_lock<std::mutex> lock(messageMutex);
-                // Move delayed messages to main queue
-                enqueueDelayedMessages();
-                // Get the next message from the main queue
-                if (!messageQueue.empty())
+                std::unique_lock<std::mutex> lock(mutex);
+                // Move delayed tasks to main queue
+                enqueueDelayedTasks();
+                // Get the next task from the main queue
+                if (!taskQueue.empty())
                 {
-                    next = std::move(messageQueue.front());
-                    messageQueue.pop();
+                    next = std::move(taskQueue.front());
+                    taskQueue.pop();
                 }
                 else if (!delayedQueue.empty())
                 {
-                    // There are no messages to process, but delayedQueue had some messages, we can wait till delay expires
+                    // There are no tasks to process, but delayedQueue had some tasks, we can wait till delay expires
                     queueWait.wait_until(lock, (*delayedQueue.begin())->getTime());
                 }
                 else
                 {
-                    // We wait for a new message to be pushed on any of the queues
+                    // We wait for a new task to be pushed on any of the queues
                     queueWait.wait(lock);
                 }
             }
             if (next)
             {
-                next->call();
+                next->execute();
             }
         }
         runLeftovers();
     }
     
-    inline void enqueueDelayedMessages()
+    inline void enqueueDelayedTasks()
     {
         const auto timeNow = std::chrono::steady_clock::now();
         for (auto it = delayedQueue.begin(); it != delayedQueue.end();)
         {
             if ((*it)->getTime() < timeNow)
             {
-                auto ptr = (*it)->getMessage();
+                auto ptr = (*it)->getTask();
                 if (ptr)
                 {
-                    messageQueue.emplace(std::move(ptr));
+                    taskQueue.emplace(std::move(ptr));
                 }
                 it = delayedQueue.erase(it);
             }
@@ -275,12 +275,12 @@ protected:
     
     inline void runLeftovers()
     {
-        // Process any leftover messages
-        std::lock_guard<std::mutex> lock(messageMutex);
-        while (messageQueue.size())
+        // Process any leftover tasks
+        std::lock_guard<std::mutex> lock(mutex);
+        while (taskQueue.size())
         {
-            messageQueue.front()->call();
-            messageQueue.pop();
+            taskQueue.front()->execute();
+            taskQueue.pop();
         }
     }
     
@@ -307,14 +307,14 @@ protected:
         isRunning = newIsRunning;
     }
     
-    inline bool getIsAcceptingMessages() const noexcept
+    inline bool getIsAcceptingTasks() const noexcept
     {
-        return isAcceptingMessages;
+        return isAcceptingTasks;
     }
 
-    inline void setIsAcceptingMessages(bool newIsAcceptingMessages) noexcept
+    inline void setIsAcceptingTasks(bool newIsAcceptingTasks) noexcept
     {
-        isAcceptingMessages = newIsAcceptingMessages;
+        isAcceptingTasks = newIsAcceptingTasks;
     }
     
     inline bool getIsSameThread() const noexcept
@@ -324,27 +324,41 @@ protected:
 
 private:
     
-    /// @brief base class for thread message
-    class Message
+    /// @brief base class for thread task
+    class Task
     {
     public:
-        virtual ~Message() = default;
-        virtual void call() {}
+        virtual ~Task() = default;
+        virtual void execute() {}
+        inline void cancel() noexcept
+        {
+            isCancelled = true;
+        }
+    protected:
+        inline bool getIsCancelled() const noexcept
+        {
+            return isCancelled;
+        }
+    private:
+        std::atomic_bool isCancelled { false };
     };
     
-    /// @brief templated message to wrap a callable object
+    /// @brief templated task to wrap a callable object
     template<typename TCallable>
-    class CallableMessage : public Message
+    class TaskWithCallable : public Task
     {
     public:
-        CallableMessage(const TCallable& initCallableObject)
+        TaskWithCallable(const TCallable& initCallableObject)
             : callableObject(initCallableObject)
         {}
-        inline void call() override
+        inline void execute() override
         {
             try
             {
-                callableObject();
+                if (!getIsCancelled())
+                {
+                    callableObject();
+                }
             }
             catch(...)
             {
@@ -355,24 +369,39 @@ private:
         TCallable callableObject;
     };
     
-    /// @brief templated message to wrap a callable object which accepts promise object that can be used to signal finish of the callable (useful for subsequent async calls)
+    /// @brief templated task to wrap a callable object which accepts promise object that can be used to signal finish of the callable (useful for subsequent async calls)
     template<typename TReturn, typename TCallable>
-    class CallableMessageWithPromise : public Message
+    class TaskWithPromise : public Task
     {
     public:
-        CallableMessageWithPromise(const TCallable& initCallableObject, std::promise<TReturn> initWaitablePromise)
+        TaskWithPromise(const TCallable& initCallableObject, std::promise<TReturn> initWaitablePromise)
             : callableObject(initCallableObject)
             , waitablePromise(std::move(initWaitablePromise))
         {}
-        inline void call() override
+        inline void execute() override
         {
-            actualCall<TReturn>();
+            if (!getIsCancelled())
+            {
+                actualCall<TReturn>();
+            }
+            else
+            {
+                try
+                {
+                    // As this task was cancelled we report back a broken promise exception
+                    waitablePromise.set_exception(std::future_error(std::future_errc::broken_promise));
+                }
+                catch(...)
+                {
+                    // We can't do nothing as nobody is listening, but we don't want the thread to explode
+                }
+            }
         }
     private:
         TCallable callableObject;
         std::promise<TReturn> waitablePromise;
         
-        template<typename TR>
+        template<typename TRet>
         void actualCall()
         {
             try
@@ -395,57 +424,68 @@ private:
         template<>
         inline void actualCall<void>()
         {
-            callableObject();
-            waitablePromise.set_value();
+            try
+            {
+                callableObject();
+                waitablePromise.set_value();
+            }
+            catch(...)
+            {
+                try
+                {
+                    waitablePromise.set_exception(std::current_exception());
+                }
+                catch(...)
+                {
+                    // We can't do nothing as nobody is listening, but we don't want the thread to explode
+                }
+            }
         }
     };
     
-    /// @brief templated message to wrap a callable object
-    class DelayedMessageWrapper
+    /// @brief templated task to wrap a callable object
+    class DelayedTaskWrapper
     {
     public:
-        DelayedMessageWrapper(std::chrono::time_point<std::chrono::steady_clock> initTime,
-                              std::unique_ptr<Message> initMessage)
+        DelayedTaskWrapper(std::chrono::time_point<std::chrono::steady_clock> initTime,
+                              std::unique_ptr<Task> initTask)
             : time(initTime)
-            , message(std::move(initMessage))
+            , task(std::move(initTask))
         {}
-        inline bool operator<(const DelayedMessageWrapper& other)
+        inline bool operator<(const DelayedTaskWrapper& other)
         {
             return time < other.getTime();
         }
         inline void cancel() noexcept
         {
-            isCancelled = true;
-        }
-        inline bool getIsCancelled() const noexcept
-        {
-            return isCancelled;
-        }
-        inline std::unique_ptr<Message> getMessage()
-        {
-            if (getIsCancelled())
+            const std::lock_guard<decltype(mutex)> lock(mutex);
+            if (task)
             {
-                return nullptr;
+                task->cancel();
             }
-            return std::move(message);
+        }
+        inline std::unique_ptr<Task> getTask()
+        {
+            const std::lock_guard<decltype(mutex)> lock(mutex);
+            return std::move(task);
         }
         inline std::chrono::time_point<std::chrono::steady_clock> getTime() const noexcept
         {
             return time;
         }
     private:
-        std::atomic_bool isCancelled { false };
+        std::recursive_mutex mutex;
         const std::chrono::time_point<std::chrono::steady_clock> time {};
-        std::unique_ptr<Message> message;
+        std::unique_ptr<Task> task;
     };
 
     std::atomic<bool> isRunning { false };
-    std::atomic<bool> isAcceptingMessages { true };
-    std::queue<std::unique_ptr<Message>> messageQueue;
-    std::multiset<std::shared_ptr<DelayedMessageWrapper>> delayedQueue;
+    std::atomic<bool> isAcceptingTasks { true };
+    std::queue<std::unique_ptr<Task>> taskQueue;
+    std::multiset<std::shared_ptr<DelayedTaskWrapper>> delayedQueue;
     std::unique_ptr<std::thread> thread;
     std::condition_variable queueWait;
-    std::mutex messageMutex;
+    std::mutex mutex;
 };
 
 /// @brief Class representing a currently executing thread
@@ -462,17 +502,17 @@ public:
     /// @warning calling this method will efectivelly block current thread
     inline void start() override
     {
-        setIsAcceptingMessages(true);
+        setIsAcceptingTasks(true);
         setIsRunning(true);
         runLoop();
     }
 
-    /// @brief signal the thread to stop - this also stops receiving messages
-    /// @warning if a message is sent after calling this method an exception will be thrown
+    /// @brief signal the thread to stop - this also stops receiving tasks
+    /// @warning if a task is sent after calling this method an exception will be thrown
     inline void stop() override
     {
         setIsRunning(false);
-        setIsAcceptingMessages(false);
+        setIsAcceptingTasks(false);
     }
 };
     
