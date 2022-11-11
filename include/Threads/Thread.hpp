@@ -123,7 +123,7 @@ public:
         }
         else
         {
-            throw std::runtime_error("Thread is not excepting any tasks, the thread has been signaled for stopping");
+            throw std::runtime_error("Thread is not accepting any tasks, the thread has been signaled for stopping");
         }
     }
     
@@ -144,7 +144,7 @@ public:
         }
         else
         {
-            throw std::runtime_error("Thread is not excepting any tasks, the thread has been signaled for stopping");
+            throw std::runtime_error("Thread is not accepting any tasks, the thread has been signaled for stopping");
         }
     }
     
@@ -174,7 +174,7 @@ public:
         }
         else
         {
-            throw std::runtime_error("Thread is not excepting any tasks, the thread has been signaled for stopping");
+            throw std::runtime_error("Thread is not accepting any tasks, the thread has been signaled for stopping");
         }
     }
     
@@ -448,7 +448,7 @@ private:
     {
     public:
         DelayedTaskWrapper(std::chrono::time_point<std::chrono::steady_clock> initTime,
-                              std::unique_ptr<Task> initTask)
+                           std::unique_ptr<Task> initTask)
             : time(initTime)
             , task(std::move(initTask))
         {}
