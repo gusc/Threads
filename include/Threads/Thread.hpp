@@ -342,6 +342,7 @@ protected:
     inline void setIsRunning(bool newIsRunning) noexcept
     {
         isRunning = newIsRunning;
+        queueWait.notify_one();
     }
     
     inline bool getIsAcceptingTasks() const noexcept
@@ -426,7 +427,7 @@ private:
                 try
                 {
                     // As this task was cancelled we report back a broken promise exception
-                    waitablePromise.set_exception(std::future_error(std::future_errc::broken_promise));
+                    waitablePromise.set_exception(std::make_exception_ptr(std::future_error(std::future_errc::broken_promise)));
                 }
                 catch(...)
                 {
