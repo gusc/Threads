@@ -119,5 +119,19 @@ void runThreadTests()
         t.start();
     }
     
+    // Test ThisThread
+    {
+        gusc::Threads::ThisThread tt;
+        tt.setThreadProc([&](const gusc::Threads::Thread::StopToken& token){
+            tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
+            tt.stop();
+            if (token.getIsStopping())
+            {
+                tlog << "This thread has been informed to stop";
+            }
+        });
+        tt.start();
+    }
+    
     tlog.flush();
 }

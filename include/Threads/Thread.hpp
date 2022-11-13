@@ -24,9 +24,20 @@ public:
     {
         friend Thread;
     public:
-        StartToken()
-            : future(promise.get_future())
+        StartToken() = default;
+        StartToken(std::future<void> initFuture)
+            : future(std::move(initFuture))
         {}
+        StartToken(StartToken&& other) noexcept
+            : isStarted(other.isStarted.load())
+            , future(std::move(other.future))
+        {}
+        StartToken& operator=(StartToken&& other) noexcept
+        {
+            isStarted = other.isStarted.load();
+            future = std::move(other.future);
+            return *this;
+        }
         inline bool getIsStarted() const noexcept
         {
             return isStarted;
@@ -37,20 +48,22 @@ public:
         }
     private:
         std::atomic_bool isStarted { false };
-        std::promise<void> promise;
         std::future<void> future;
-        
-        inline void notifyStart() noexcept
-        {
-            isStarted = true;
-            promise.set_value();
-        }
     };
     
     class StopToken
     {
         friend Thread;
     public:
+        StopToken() = default;
+        StopToken(StopToken&& other) noexcept
+            : isStopping(other.isStopping.load())
+        {}
+        StopToken& operator=(StopToken&& other) noexcept
+        {
+            isStopping = other.isStopping.load();
+            return *this;
+        }
         inline bool getIsStopping() const noexcept
         {
             return isStopping;
@@ -64,6 +77,7 @@ public:
         }
     };
     
+    Thread() = default;
     Thread(const std::function<void(const StopToken&)>& initFunction)
         : runnable(initFunction)
     {}
@@ -88,7 +102,7 @@ public:
     {
         if (!getIsStarted())
         {
-            setIsStarted();
+            setIsStarted(true);
             thread = std::thread{ &Thread::run, this };
             return startToken;
         }
@@ -153,13 +167,24 @@ public:
 protected:
     inline void run()
     {
-        startToken.notifyStart();
-        runnable(stopToken);
+        startToken.isStarted = true;
+        startPromise.set_value();
+        if (runnable)
+        {
+            try
+            {
+                runnable(stopToken);
+            }
+            catch (...)
+            {
+                // Prevent the thread from crashing
+            }
+        }
     }
     
-    inline void setIsStarted() noexcept
+    inline void setIsStarted(bool newIsStarted) noexcept
     {
-        isStarted = true;
+        isStarted = newIsStarted;
     }
     
     inline bool getIsStarted() const noexcept
@@ -167,34 +192,36 @@ protected:
         return isStarted;
     }
     
-private:
-    
-    /// @brief base class for thread runnable
-    class Runnable
+    inline StartToken& createStartToken() noexcept
     {
-    public:
-        Runnable(const std::function<void(const StopToken&)>& initFunction)
-            : function(initFunction)
-        {}
-        inline void operator()(const StopToken& token) const
-        {
-            try
-            {
-                function(token);
-            }
-            catch(...)
-            {
-                // We can't do nothing as nobody is listening, but we don't want the thread to explode
-            }
-        }
-    private:
-        std::function<void(const StopToken&)> function;
-    };
+        startPromise = {};
+        startToken = { startPromise.get_future() };
+        return startToken;
+    }
     
+    inline void createStopToken() noexcept
+    {
+        stopToken = StopToken{};
+    }
+    
+    inline void setRunnable(const std::function<void(const StopToken&)>& newRunnable)
+    {
+        if (!getIsStarted())
+        {
+            runnable = newRunnable;
+        }
+        else
+        {
+            throw std::runtime_error("Can not change the runnable of the thread that has already started");
+        }
+    }
+    
+private:
     std::atomic_bool isStarted { false };
+    std::promise<void> startPromise;
     StartToken startToken;
     StopToken stopToken;
-    Runnable runnable;
+    std::function<void(const StopToken&)> runnable;
     std::thread thread;
 };
 
@@ -202,12 +229,31 @@ private:
 class ThisThread : public Thread
 {
 public:
+    /// @brief set a thread procedure to use on this thread with StopToken
+    inline void setThreadProc(const std::function<void(const StopToken&)>& newProc)
+    {
+        setRunnable(newProc);
+    }
+    /// @brief set a thread procedure to use on this thread
+    inline void setThreadProc(const std::function<void(void)>& newProc)
+    {
+        setRunnable([newProc](const StopToken& token){
+            newProc();
+        });
+    }
     /// @brief start the thread and it's run-loop
     /// @warning calling this method will efectivelly block current thread
     inline StartToken& start() override
     {
-        setIsStarted();
-        run();
+        if (!getIsStarted())
+        {
+            setIsStarted(true);
+            createStopToken();
+            auto& token = createStartToken();
+            run();
+            setIsStarted(false);
+            return token;
+        }
     }
     
     inline std::thread::id getId() const noexcept override
