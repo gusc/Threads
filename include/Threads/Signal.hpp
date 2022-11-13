@@ -21,7 +21,7 @@ namespace gusc::Threads
 template<typename ...TArg>
 class Signal
 {
-    /// @brief internal class representing a single message that wraps the signal data and the listener and is dispatched to a listener's thread
+    /// @brief internal class representing a single message that wraps the signal data and the listener and is dispatched to a listener's queue
     class SignalMessage
     {
     public:
@@ -38,7 +38,7 @@ class Signal
         std::tuple<TArg...> data;
     };
     
-    /// @brief internal class representing a signal connection slot (listener and it's affinity thread)
+    /// @brief internal class representing a signal connection slot (listener and it's affinity serial queue)
     class Slot
     {
     public:
@@ -68,7 +68,7 @@ class Signal
         {
             if (!hostQueue)
             {
-                throw std::runtime_error("Host thread is null");
+                throw std::runtime_error("Host queue is null");
             }
             if (hostQueue->getIsSameThread())
             {
@@ -97,65 +97,65 @@ public:
     ~Signal() = default;
     
     /// @brief connect a listener callback to this signal
-    /// @param thread - listener's thread of affinity
+    /// @param queue - listener's serial task queue
     /// @param callback - listener's callback that will be called when signal is emitted
     /// @return connection ID for disconnecting the slot later or 0 if failed to insert the slot
-    inline size_t connect(Thread* thread, const std::function<void(const TArg&...)>& callback) noexcept
+    inline size_t connect(SerialTaskQueue* queue, const std::function<void(const TArg&...)>& callback) noexcept
     {
         typedef void(fnType)(const TArg&...);
         fnType* const* fnPointer = callback.template target<fnType*>();
-        return connect({thread, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
+        return connect({queue, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
     }
 
     /// @brief connect a listener callback to this signal
-    /// @param thread - listener's thread of affinity
+    /// @param queue - listener's serial task queue
     /// @param callback - listener's callback that will be called when signal is emitted
     /// @return connection ID for disconnecting the slot later or 0 if failed to insert the slot
     template<typename TClass>
-    inline size_t connect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
+    inline size_t connect(TClass* queue, void(TClass::* callback)(const TArg&...)) noexcept
     {
-        return connect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+        return connect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](const TArg&... args){(queue->*callback)(args...);}});
     }
 
     /// @brief connect a listener callback to this signal
-    /// @param thread - listener's thread of affinity
+    /// @param queue - listener's serial task queue
     /// @param callback - listener's callback that will be called when signal is emitted
     /// @return connection ID for disconnecting the slot later or 0 if failed to insert the slot
     template<typename TClass>
-    inline size_t connect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
+    inline size_t connect(TClass* queue, void(TClass::* callback)(TArg...)) noexcept
     {
-        return connect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+        return connect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](const TArg&... args){(queue->*callback)(args...);}});
     }
     
     /// @brief disconnect a listener callback from this signal
-    /// @param thread - listener's thread of affinity
+    /// @param queue - listener's serial task queue
     /// @param callback - listener's callback that will be called when signal is emitted
     /// @return false if listener was not connected
-    inline bool disconnect(Thread* thread, const std::function<void(const TArg&...)>& callback) noexcept
+    inline bool disconnect(SerialTaskQueue* queue, const std::function<void(const TArg&...)>& callback) noexcept
     {
         typedef void(fnType)(const TArg&...);
         fnType* const* fnPointer = callback.template target<fnType*>();
-        return disconnect({thread, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
+        return disconnect({queue, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
     }
     
     /// @brief disconnect a listener callback from this signal
-    /// @param thread - listener's thread of affinity
+    /// @param queue - listener's serial task queue
     /// @param callback - listener's callback that will be called when signal is emitted
     /// @return false if listener was not connected
     template<typename TClass>
-    inline bool disconnect(TClass* thread, void(TClass::* callback)(const TArg&...)) noexcept
+    inline bool disconnect(TClass* queue, void(TClass::* callback)(const TArg&...)) noexcept
     {
-        return disconnect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+        return disconnect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](const TArg&... args){(queue->*callback)(args...);}});
     }
 
     /// @brief disconnect a listener callback from this signal
-    /// @param thread - listener's thread of affinity
+    /// @param queue - listener's serial task queue
     /// @param callback - listener's callback that will be called when signal is emitted
     /// @return false if listener was not connected
     template<typename TClass>
-    inline bool disconnect(TClass* thread, void(TClass::* callback)(TArg...)) noexcept
+    inline bool disconnect(TClass* queue, void(TClass::* callback)(TArg...)) noexcept
     {
-        return disconnect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](const TArg&... args){(thread->*callback)(args...);}});
+        return disconnect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](const TArg&... args){(queue->*callback)(args...);}});
     }
     
     /// @brief disconnect a listener callback from this signal using it's connection ID
