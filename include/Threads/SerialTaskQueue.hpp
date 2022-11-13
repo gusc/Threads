@@ -100,7 +100,10 @@ public:
     SerialTaskQueue& operator=(const SerialTaskQueue&) = delete;
     SerialTaskQueue(SerialTaskQueue&&) = delete;
     SerialTaskQueue& operator=(SerialTaskQueue&&) = delete;
-    ~SerialTaskQueue() = default;
+    ~SerialTaskQueue()
+    {
+        queueWait.notify_all();
+    };
 
     /// @brief send a task that needs to be executed on this thread
     /// @param newTask - any callable object that will be executed on this thread
