@@ -9,6 +9,7 @@
 #include "ThreadTests.hpp"
 #include "Utilities.hpp"
 #include "Threads/Thread.hpp"
+#include "Threads/ThreadPool.hpp"
 
 #include <chrono>
 
@@ -61,10 +62,12 @@ void runThreadTests()
     gusc::Threads::ThisThread mt;
     gusc::Threads::Thread t1;
     CustomThread t2;
+    gusc::Threads::ThreadPool tp(3);
     
     // Start all threads
     t1.start();
     t2.start();
+    tp.start();
     
     tlog << "Main thread ID: " + tidToStr(std::this_thread::get_id());
 
@@ -144,5 +147,5 @@ void runThreadTests()
     
     tlog.flush();
     
-    std::this_thread::sleep_for(3s);
+    std::this_thread::sleep_for(1s);
 }

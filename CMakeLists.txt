@@ -7,6 +7,7 @@ set(SOURCES
 	"include/Threads/Signal.hpp"
     "include/Threads/SerialTaskQueue.hpp"
 	"include/Threads/Thread.hpp"
+    "include/Threads/ThreadPool.hpp"
 )
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.19.0")

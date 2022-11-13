@@ -231,6 +231,6 @@ public:
     }
 };
     
-}
+} // namespace gusc::Threads
 
 #endif /* Thread_hpp */

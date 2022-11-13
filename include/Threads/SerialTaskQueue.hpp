@@ -427,6 +427,6 @@ private:
     Thread& thread;
 };
 
-}
+} // namespace gusc::Threads
 
 #endif /* SerialTaskQueue_hpp */

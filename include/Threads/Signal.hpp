@@ -370,6 +370,6 @@ private:
 
 };
 
-}
+} // namespace gusc::Threads
     
 #endif /* Signal_hpp */
