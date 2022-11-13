@@ -11,36 +11,78 @@
 
 #include <thread>
 #include <atomic>
-#include <mutex>
-#include <queue>
-#include <condition_variable>
+#include <future>
 
 namespace gusc::Threads
 {
 
 /// @brief Class representing a new thread with delayed start
-/// Clas contains simple serial queue on which runnable objects can be posted and they will be executed in order they were posted
 class Thread
 {
 public:
-    Thread() = default;
+    class StartToken
+    {
+        friend Thread;
+    public:
+        StartToken()
+            : future(promise.get_future())
+        {}
+        inline bool getIsStarted() const noexcept
+        {
+            return isStarted;
+        }
+        inline void wait()
+        {
+            future.wait();
+        }
+    private:
+        std::atomic_bool isStarted { false };
+        std::promise<void> promise;
+        std::future<void> future;
+        
+        inline void notifyStart() noexcept
+        {
+            isStarted = true;
+            promise.set_value();
+        }
+    };
+    
+    class StopToken
+    {
+        friend Thread;
+    public:
+        inline void getIsStopping() const noexcept
+        {
+            return isStopping;
+        }
+    private:
+        std::atomic_bool isStopping { false };
+    };
+    
+    Thread(const std::function<void(const StopToken&)>& initFunction)
+        : runnable(initFunction)
+    {}
     Thread(const Thread&) = delete;
     Thread& operator=(const Thread&) = delete;
     Thread(Thread&&) = delete;
     Thread& operator=(Thread&&) = delete;
     virtual ~Thread()
     {
-        setIsRunning(false);
-        join();
+        if (getIsStarted())
+        {
+            stopToken.isTerminating = true;
+            join();
+        }
     }
     
-    /// @brief start the thread and it's run-loop
-    virtual inline void start()
+    /// @brief start the thread
+    virtual inline StartToken& start()
     {
-        if (!getIsRunning())
+        if (!getIsStarted())
         {
-            setIsRunning(true);
-            thread = std::make_unique<std::thread>(&Thread::runLoop, this);
+            setIsStarted();
+            thread = { &Thread::run, this };
+            return startToken;
         }
         else
         {
@@ -48,13 +90,12 @@ public:
         }
     }
     
-    /// @brief signal the thread to stop - this also stops receiving new runnables
-    /// @warning if a task is sent after calling this method an exception will be thrown
+    /// @brief signal the thread to stop
     virtual inline void stop()
     {
-        if (getIsRunning())
+        if (getIsStarted())
         {
-            setIsRunning(false);
+            stopToken.isTerminating = true;
         }
         else
         {
@@ -63,28 +104,11 @@ public:
     }
     
     /// @brief join the thread and wait unti it's finished
-    inline void join()
+    virtual inline void join()
     {
-        if (thread && thread->joinable())
+        if (getIsStarted() && thread.joinable())
         {
-            thread->join();
-        }
-    }
-    
-    /// @brief run a callable object on this thread
-    /// @param newRunnable - any Callable object that will be executed on this thread
-    template<typename TCallable>
-    inline void run(const TCallable& newCallable)
-    {
-        if (getIsRunning())
-        {
-            const std::lock_guard<decltype(mutex)> lock(mutex);
-            queue.emplace(std::make_unique<RunnableWithObject<TCallable>>(newCallable));
-            queueWait.notify_one();
-        }
-        else
-        {
-            throw std::runtime_error("Thread is not running");
+            thread.join();
         }
     }
         
@@ -93,6 +117,14 @@ public:
         return getId() == other.getId();
     }
     inline bool operator!=(const Thread& other) const noexcept
+    {
+        return !(operator==(other));
+    }
+    inline bool operator==(const std::thread& other) const noexcept
+    {
+        return getId() == other.get_id();
+    }
+    inline bool operator!=(const std::thread& other) const noexcept
     {
         return !(operator==(other));
     }
@@ -105,90 +137,42 @@ public:
         return !(operator==(other));
     }
 
-    inline std::thread::id getId() const noexcept
+    virtual inline std::thread::id getId() const noexcept
     {
-        if (thread)
-        {
-            return thread->get_id();
-        }
-        else
-        {
-            // We haven't started a thread yet, so we're the same thread
-            return std::this_thread::get_id();
-        }
-    }
-    
-    inline bool getIsRunning() const noexcept
-    {
-        return isRunning;
+        return thread.get_id();
     }
     
 protected:
-    inline void runLoop()
+    inline void run()
     {
-        while (getIsRunning())
-        {
-            std::unique_ptr<Runnable> next;
-            {
-                std::unique_lock<decltype(mutex)> lock(mutex);
-                if (!queue.empty())
-                {
-                    next = std::move(queue.front());
-                    queue.pop();
-                }
-                else
-                {
-                    // Wait for any runnable to appear on the queue
-                    queueWait.wait(lock);
-                }
-            }
-            if (next)
-            {
-                next->run();
-            }
-        }
-        runLeftovers();
+        startToken.notifyStart();
+        runnable->run(stopToken);
     }
     
-    inline void runLeftovers()
+    inline void setIsStarted() noexcept
     {
-        const std::lock_guard<decltype(mutex)> lock(mutex);
-        while (queue.size())
-        {
-            queue.front()->run();
-            queue.pop();
-        }
+        isStarted = true;
     }
     
-    inline void setIsRunning(bool newIsRunning) noexcept
+    inline bool getIsStarted() const noexcept
     {
-        isRunning = newIsRunning;
-        queueWait.notify_one();
+        return isStarted;
     }
-
+    
 private:
     
     /// @brief base class for thread runnable
     class Runnable
     {
     public:
-        virtual ~Runnable() = default;
-        virtual void run() {}
-    };
-    
-    /// @brief templated task to wrap a callable object
-    template<typename TRunnable>
-    class RunnableWithObject : public Runnable
-    {
-    public:
-        RunnableWithObject(const TRunnable& initRunnableObject)
-            : runnableObject(initRunnableObject)
+        Runnable(const std::function<void(const StopToken&)>& initFunction)
+            : function(initFunction)
         {}
-        inline void run() override
+        inline void run(const StopToken& token) override
         {
             try
             {
-                runnableObject();
+                function(token);
             }
             catch(...)
             {
@@ -196,40 +180,35 @@ private:
             }
         }
     private:
-        TRunnable runnableObject;
+        std::function<void(const StopToken&)> function;
     };
     
-    std::mutex mutex;
-    std::atomic<bool> isRunning { false };
-    std::queue<std::unique_ptr<Runnable>> queue;
-    std::condition_variable queueWait;
-    std::unique_ptr<std::thread> thread;
+    std::atomic_bool isStarted { false };
+    StartToken startToken;
+    StopToken stopToken;
+    Runnable runnable;
+    std::thread thread;
 };
 
 /// @brief Class representing a currently executing thread
 class ThisThread : public Thread
 {
 public:
-    ThisThread()
-    {
-        // ThisThread is already running
-        setIsRunning(true);
-    }
-    
     /// @brief start the thread and it's run-loop
     /// @warning calling this method will efectivelly block current thread
-    inline void start() override
+    inline StartToken& start() override
     {
-        setIsRunning(true);
-        runLoop();
+        setIsStarted();
+        run();
     }
-
-    /// @brief signal the thread to stop - this also stops receiving tasks
-    /// @warning if a task is sent after calling this method an exception will be thrown
-    inline void stop() override
+    
+    inline std::thread::id getId() const noexcept override
     {
-        setIsRunning(false);
+        return std::this_thread::get_id();
     }
+    
+    inline void join() override
+    {}
 };
     
 } // namespace gusc::Threads
