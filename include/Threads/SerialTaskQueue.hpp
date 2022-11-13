@@ -86,10 +86,16 @@ public:
     };
     
     SerialTaskQueue()
-        : thread(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
+        : localThread(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
+        , thread(localThread)
     {
         thread.start();
-    };
+    }
+    SerialTaskQueue(ThisThread& initThread)
+        : thread(initThread)
+    {
+        initThread.setThreadProc(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1));
+    }
     SerialTaskQueue(const SerialTaskQueue&) = delete;
     SerialTaskQueue& operator=(const SerialTaskQueue&) = delete;
     SerialTaskQueue(SerialTaskQueue&&) = delete;
@@ -413,7 +419,8 @@ private:
     std::queue<std::shared_ptr<Task>> taskQueue;
     std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
     std::condition_variable queueWait;
-    Thread thread;
+    Thread localThread;
+    Thread& thread;
 };
 
 } // namespace gusc::Threads

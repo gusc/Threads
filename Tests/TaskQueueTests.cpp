@@ -53,9 +53,11 @@ static auto globalLambda = [](){
 void runTaskQueueTests()
 {
     tlog << "Thread Tests";
-        
+    
+    gusc::Threads::ThisThread tt;
+    
     gusc::Threads::SerialTaskQueue t1;
-    gusc::Threads::SerialTaskQueue t2;
+    gusc::Threads::SerialTaskQueue t2{tt};
     
     tlog << "Main thread ID: " + tidToStr(std::this_thread::get_id());
 
@@ -156,7 +158,12 @@ void runTaskQueueTests()
     tlog << "Sync and async results" << std::to_string(f1.getValue()) << std::to_string(f2.getValue()) << std::to_string(res1) << std::to_string(res2);
     tlog.flush();
     
-    std::this_thread::sleep_for(3s);
+    t2.sendDelayed([&](){
+        tlog << "Stopping serial queue running on ThisThread";
+        tt.stop();
+    }, 3s);
+    tt.start();
+    std::this_thread::sleep_for(5s);
     
     // Task queue objects are destrouyed and their threads are stopped
     tlog << "Finishing";
