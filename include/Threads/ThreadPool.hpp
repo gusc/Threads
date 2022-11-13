@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 #include <atomic>
+#include <queue>
 
 namespace gusc::Threads
 {

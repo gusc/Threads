@@ -51,16 +51,24 @@ public:
     {
         friend Thread;
     public:
-        inline void getIsStopping() const noexcept
+        inline bool getIsStopping() const noexcept
         {
             return isStopping;
         }
     private:
         std::atomic_bool isStopping { false };
+        
+        inline void notifyStop() noexcept
+        {
+            isStopping = true;
+        }
     };
     
     Thread(const std::function<void(const StopToken&)>& initFunction)
         : runnable(initFunction)
+    {}
+    Thread(const std::function<void(void)>& initFunction)
+        : runnable([initFunction](const StopToken&){initFunction();})
     {}
     Thread(const Thread&) = delete;
     Thread& operator=(const Thread&) = delete;
@@ -70,7 +78,7 @@ public:
     {
         if (getIsStarted())
         {
-            stopToken.isTerminating = true;
+            stopToken.notifyStop();
             join();
         }
     }
@@ -81,7 +89,7 @@ public:
         if (!getIsStarted())
         {
             setIsStarted();
-            thread = { &Thread::run, this };
+            thread = std::thread{ &Thread::run, this };
             return startToken;
         }
         else
@@ -95,7 +103,7 @@ public:
     {
         if (getIsStarted())
         {
-            stopToken.isTerminating = true;
+            stopToken.notifyStop();
         }
         else
         {
@@ -146,7 +154,7 @@ protected:
     inline void run()
     {
         startToken.notifyStart();
-        runnable->run(stopToken);
+        runnable(stopToken);
     }
     
     inline void setIsStarted() noexcept
@@ -168,7 +176,7 @@ private:
         Runnable(const std::function<void(const StopToken&)>& initFunction)
             : function(initFunction)
         {}
-        inline void run(const StopToken& token) override
+        inline void operator()(const StopToken& token) const
         {
             try
             {

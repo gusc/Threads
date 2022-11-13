@@ -20,11 +20,7 @@ namespace
 static Logger tlog;
 }
 
-class CustomThread : public gusc::Threads::Thread
-{
-};
-
-static void callableFunction()
+static void callableFunction(const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Callable function thread ID: " + tidToStr(std::this_thread::get_id());
 }
@@ -32,7 +28,7 @@ static void callableFunction()
 class MethodWrapper
 {
 public:
-    void callableMethod()
+    void callableMethod(const gusc::Threads::Thread::StopToken&)
     {
         tlog << "Callable method thread ID: " + tidToStr(std::this_thread::get_id());
     }
@@ -40,17 +36,17 @@ public:
 
 struct CallableStruct
 {
-    void operator()() const
+    void operator()(const gusc::Threads::Thread::StopToken&) const
     {
         tlog << "Callable struct thread ID: " + tidToStr(std::this_thread::get_id());
     }
 };
 
-static const auto globalConstLambda = [](){
+static const auto globalConstLambda = [](const gusc::Threads::Thread::StopToken&){
     tlog << "Global const lambda thread ID: " + tidToStr(std::this_thread::get_id());
 };
 
-static auto globalLambda = [](){
+static auto globalLambda = [](const gusc::Threads::Thread::StopToken&){
     tlog << "Global lambda thread ID: " + tidToStr(std::this_thread::get_id());
 };
 
@@ -58,129 +54,70 @@ static auto globalLambda = [](){
 void runThreadTests()
 {
     tlog << "Thread Tests";
-        
-    gusc::Threads::ThisThread mt;
-    gusc::Threads::Thread t1;
-    CustomThread t2;
-    gusc::Threads::ThreadPool tp(3);
-    
-    // Start all threads
-    t1.start();
-    t2.start();
-    tp.start();
-    
     tlog << "Main thread ID: " + tidToStr(std::this_thread::get_id());
 
-    // Test function
-    callableFunction();
-    mt.run(&callableFunction);
-    t1.run(&callableFunction);
-    t2.run(&callableFunction);
-    tp.run(&callableFunction);
-    tp.run(&callableFunction);
-    tp.run(&callableFunction);
+    gusc::Threads::Thread::StopToken token;
     
+    // Test simple function
+    {
+        callableFunction(token);
+        gusc::Threads::Thread t(callableFunction);
+        t.start();
+    }
     
     // Test object method
-    MethodWrapper o;
-    o.callableMethod();
-    mt.run(std::bind(&MethodWrapper::callableMethod, &o));
-    t1.run(std::bind(&MethodWrapper::callableMethod, &o));
-    t2.run(std::bind(&MethodWrapper::callableMethod, &o));
-    tp.run(std::bind(&MethodWrapper::callableMethod, &o));
-    tp.run(std::bind(&MethodWrapper::callableMethod, &o));
-    tp.run(std::bind(&MethodWrapper::callableMethod, &o));
+    {
+        MethodWrapper o;
+        o.callableMethod(token);
+        gusc::Threads::Thread t(std::bind(&MethodWrapper::callableMethod, &o, std::placeholders::_1));
+        t.start();
+    }
     
     // Test callable struct
-    const CallableStruct cb;
-    cb();
-    mt.run(cb);
-    t1.run(cb);
-    t2.run(cb);
-    tp.run(cb);
-    tp.run(cb);
-    tp.run(cb);
+    {
+        const CallableStruct cb;
+        cb(token);
+        gusc::Threads::Thread t(cb);
+        t.start();
+    }
 
     // Test callable struct temporary
-    mt.run(CallableStruct{});
-    t1.run(CallableStruct{});
-    t2.run(CallableStruct{});
-    tp.run(CallableStruct{});
-    tp.run(CallableStruct{});
-    tp.run(CallableStruct{});
+    {
+        gusc::Threads::Thread t(CallableStruct{});
+        t.start();
+    }
     
     // Test local lambda
-    auto localLambda = [](){
-        tlog << "Local lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    };
-    localLambda();
-    mt.run(localLambda);
-    t1.run(localLambda);
-    t2.run(localLambda);
-    tp.run(localLambda);
-    tp.run(localLambda);
-    tp.run(localLambda);
+    {
+        auto localLambda = [](const gusc::Threads::Thread::StopToken&){
+            tlog << "Local lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        };
+        localLambda(token);
+        gusc::Threads::Thread t(localLambda);
+        t.start();
+    }
     
     // Test global lambda
-    globalLambda();
-    mt.run(globalLambda);
-    t1.run(globalLambda);
-    t2.run(globalLambda);
-    tp.run(globalLambda);
-    tp.run(globalLambda);
-    tp.run(globalLambda);
+    {
+        globalLambda(token);
+        gusc::Threads::Thread t(globalLambda);
+        t.start();
+    }
     
     // Test global const lambda
-    globalConstLambda();
-    mt.run(globalConstLambda);
-    t1.run(globalConstLambda);
-    t2.run(globalConstLambda);
-    tp.run(globalConstLambda);
-    tp.run(globalConstLambda);
-    tp.run(globalConstLambda);
+    {
+        globalConstLambda(token);
+        gusc::Threads::Thread t(globalConstLambda);
+        t.start();
+    }
     
     // Test anonymous lambda
-    mt.run([](){
-        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    t1.run([](){
-        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    t2.run([](){
-        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    tp.run([](){
-        tlog << "Anonymous lambda 1 thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    tp.run([](){
-        tlog << "Anonymous lambda 2 thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    tp.run([](){
-        tlog << "Anonymous lambda 3 thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    
-    // Post a stop on all the threads
-    mt.run([&](){
-        tlog << "Stop thread ID: " + tidToStr(std::this_thread::get_id());
-        mt.stop();
-    });
-    t1.run([&](){
-        tlog << "Stop thread ID: " + tidToStr(std::this_thread::get_id());
-        t1.stop();
-    });
-    t2.run([&](){
-        tlog << "Stop thread ID: " + tidToStr(std::this_thread::get_id());
-        t2.stop();
-    });
-    tp.run([&](){
-        tlog << "Stop thread pool";
-        tp.stop();
-    });
-    
-    // Start this-thread loop
-    mt.start();
+    {
+        gusc::Threads::Thread t([](const gusc::Threads::Thread::StopToken&){
+            tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        });
+        t.start();
+    }
     
     tlog.flush();
-    
-    std::this_thread::sleep_for(1s);
 }

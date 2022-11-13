@@ -14,6 +14,7 @@
 #include <mutex>
 #include <utility>
 #include <future>
+#include <queue>
 
 namespace gusc::Threads
 {
@@ -85,33 +86,22 @@ public:
     };
     
     SerialTaskQueue()
-        : SerialTaskQueue(localThread)
-    {};
-    SerialTaskQueue(Thread& initThread)
-        : thread(initThread)
+        : thread(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
     {
-        if (!thread.getIsRunning())
-        {
-            thread.start();
-        }
-        thread.run(std::bind(&SerialTaskQueue::runLoop, this));
-    }
+        thread.start();
+    };
     SerialTaskQueue(const SerialTaskQueue&) = delete;
     SerialTaskQueue& operator=(const SerialTaskQueue&) = delete;
     SerialTaskQueue(SerialTaskQueue&&) = delete;
     SerialTaskQueue& operator=(SerialTaskQueue&&) = delete;
-    virtual ~SerialTaskQueue()
-    {
-        isRunning = false;
-        queueWait.notify_all();
-    }
+    ~SerialTaskQueue() = default;
 
     /// @brief send a task that needs to be executed on this thread
     /// @param newTask - any callable object that will be executed on this thread
     template<typename TCallable>
     inline void send(const TCallable& newTask)
     {
-        if (isRunning)
+        if (!isStopping)
         {
             std::lock_guard<std::mutex> lock(mutex);
             taskQueue.emplace(std::make_shared<TaskWithCallable<TCallable>>(newTask));
@@ -130,7 +120,7 @@ public:
     template<typename TCallable>
     inline TaskHandle sendDelayed(const TCallable& newTask, const std::chrono::milliseconds& timeout)
     {
-        if (isRunning)
+        if (!isStopping)
         {
             std::lock_guard<std::mutex> lock(mutex);
             auto time = std::chrono::steady_clock::now() + timeout;
@@ -152,7 +142,7 @@ public:
     template<typename TReturn, typename TCallable>
     inline TaskHandleWithFuture<TReturn> sendAsync(const TCallable& newTask)
     {
-        if (isRunning)
+        if (!isStopping)
         {
             std::promise<TReturn> promise;
             auto future = promise.get_future();
@@ -183,7 +173,7 @@ public:
     template<typename TReturn, typename TCallable>
     inline TReturn sendSync(const TCallable& newTask)
     {
-        if (!isRunning)
+        if (isStopping)
         {
             throw std::runtime_error("Can not place a blocking task if the thread is not started");
         }
@@ -199,10 +189,16 @@ public:
         sendSync<void>(newTask);
     }
     
-private:
-    inline void runLoop()
+    /// @brief Check if we are on caller is on the same thread as the task queue
+    inline bool getIsSameThread() const noexcept
     {
-        while (isRunning)
+        return thread.getId() == std::this_thread::get_id();
+    }
+    
+private:
+    inline void runLoop(const Thread::StopToken& stopToken)
+    {
+        while (!stopToken.getIsStopping())
         {
             std::shared_ptr<Task> next;
             {
@@ -231,6 +227,7 @@ private:
                 next->execute();
             }
         }
+        isStopping = true;
         runLeftovers();
     }
     
@@ -265,13 +262,6 @@ private:
             taskQueue.pop();
         }
     }
-    
-    inline bool getIsSameThread() const noexcept
-    {
-        return thread.getId() == std::this_thread::get_id();
-    }
-
-private:
     
     /// @brief base class for thread task
     class Task
@@ -419,12 +409,11 @@ private:
     };
     
     std::mutex mutex;
-    std::atomic<bool> isRunning { true };
+    std::atomic_bool isStopping { false };
     std::queue<std::shared_ptr<Task>> taskQueue;
     std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
     std::condition_variable queueWait;
-    Thread localThread;
-    Thread& thread;
+    Thread thread;
 };
 
 } // namespace gusc::Threads

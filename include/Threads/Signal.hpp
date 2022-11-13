@@ -9,7 +9,7 @@
 #ifndef Signal_hpp
 #define Signal_hpp
 
-#include "Thread.hpp"
+#include "SerialTaskQueue.hpp"
 
 #include <tuple>
 #include <map>
@@ -43,8 +43,8 @@ class Signal
     {
     public:
         Slot() = delete;
-        Slot(Thread* initHostThread, void* initCallbackPtr, const std::function<void(TArg...)>& initCallback)
-            : hostThread(initHostThread)
+        Slot(SerialTaskQueue* initHostQueue, void* initCallbackPtr, const std::function<void(TArg...)>& initCallback)
+            : hostQueue(initHostQueue)
             , callbackPtr(initCallbackPtr)
             , callback(initCallback)
         {}
@@ -61,27 +61,27 @@ class Signal
         
         inline bool operator==(const Slot& other) const noexcept
         {
-            return callbackPtr && hostThread == other.hostThread && callbackPtr != other.callbackPtr;
+            return callbackPtr && hostQueue == other.hostQueue && callbackPtr != other.callbackPtr;
         }
         
         inline void call(const TArg&... args) const
         {
-            if (!hostThread)
+            if (!hostQueue)
             {
                 throw std::runtime_error("Host thread is null");
             }
-            if (*hostThread == std::this_thread::get_id())
+            if (hostQueue->getIsSameThread())
             {
                 callback(args...);
             }
             else
             {
-                hostThread->run(SignalMessage{callback, args...});
+                hostQueue->send(SignalMessage{callback, args...});
             }
         }
         
     private:
-        Thread* hostThread { nullptr };
+        SerialTaskQueue* hostQueue { nullptr };
         void* callbackPtr { nullptr };
         std::function<void(TArg...)> callback;
         size_t connectionId { 0 };
@@ -232,8 +232,8 @@ class Signal<void>
     {
     public:
         Slot() = delete;
-        Slot(Thread* initHostThread, void* initCallbackPtr, const std::function<void(void)>& initCallback)
-            : hostThread(initHostThread)
+        Slot(SerialTaskQueue* initHostQueue, void* initCallbackPtr, const std::function<void(void)>& initCallback)
+            : hostQueue(initHostQueue)
             , callbackPtr(initCallbackPtr)
             , callback(initCallback)
         {}
@@ -250,23 +250,23 @@ class Signal<void>
         
         bool operator==(const Slot& other)
         {
-            return callbackPtr && hostThread == other.hostThread && callbackPtr == other.callbackPtr;
+            return callbackPtr && hostQueue == other.hostQueue && callbackPtr == other.callbackPtr;
         }
         
         void call() const
         {
-            if (*hostThread == std::this_thread::get_id())
+            if (hostQueue->getIsSameThread())
             {
                 callback();
             }
             else
             {
-                hostThread->run(callback);
+                hostQueue->send(callback);
             }
         }
         
     private:
-        Thread* hostThread { nullptr };
+        SerialTaskQueue* hostQueue { nullptr };
         void* callbackPtr { nullptr };
         std::function<void(void)> callback;
         size_t connectionId { 0 };
@@ -282,30 +282,30 @@ public:
     Signal& operator=(Signal<void>&& other) = delete;
     ~Signal() = default;
     
-    inline bool connect(Thread* thread, const std::function<void(void)>& callback) noexcept
+    inline bool connect(SerialTaskQueue* queue, const std::function<void(void)>& callback) noexcept
     {
         typedef void(fnType)(void);
         fnType* const* fnPointer = callback.target<fnType*>();
-        return connect({thread, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
+        return connect({queue, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
     }
     
     template<typename TClass>
-    inline bool connect(TClass* thread, void(TClass::* callback)(void)) noexcept
+    inline bool connect(TClass* queue, void(TClass::* callback)(void)) noexcept
     {
-        return connect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](){(thread->*callback)();}});
+        return connect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](){(queue->*callback)();}});
     }
     
-    inline bool disconnect(Thread* thread, const std::function<void(void)>& callback) noexcept
+    inline bool disconnect(SerialTaskQueue* queue, const std::function<void(void)>& callback) noexcept
     {
         typedef void(fnType)(void);
         fnType* const* fnPointer = callback.target<fnType*>();
-        return disconnect({thread, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
+        return disconnect({queue, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
     }
     
     template<typename TClass>
-    inline bool disconnect(TClass* thread, void(TClass::* callback)(void)) noexcept
+    inline bool disconnect(TClass* queue, void(TClass::* callback)(void)) noexcept
     {
-        return disconnect(Slot{thread, reinterpret_cast<void*&>(callback), [thread, callback](){(thread->*callback)();}});
+        return disconnect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](){(queue->*callback)();}});
     }
 
     inline bool disconnect(const size_t connectionId) noexcept
