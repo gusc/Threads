@@ -102,6 +102,7 @@ public:
     SerialTaskQueue& operator=(SerialTaskQueue&&) = delete;
     ~SerialTaskQueue()
     {
+        isStopping = true;
         queueWait.notify_all();
     };
 
@@ -225,7 +226,7 @@ private:
                     // There are no tasks to process, but delayedQueue had some tasks, we can wait till delay expires
                     queueWait.wait_until(lock, (*delayedQueue.begin())->getTime());
                 }
-                else
+                else if (!isStopping)
                 {
                     // We wait for a new task to be pushed on any of the queues
                     queueWait.wait(lock);
