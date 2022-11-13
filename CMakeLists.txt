@@ -5,8 +5,8 @@ option(Threads_BuildTests "Build the unit tests when BUILD_TESTING is enabled." 
 
 set(SOURCES
 	"include/Threads/Signal.hpp"
+    "include/Threads/SerialTaskQueue.hpp"
 	"include/Threads/Thread.hpp"
-    "include/Threads/TaskQueue.hpp"
 )
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.19.0")

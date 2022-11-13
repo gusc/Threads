@@ -8,7 +8,7 @@
 
 #include "TaskQueueTests.hpp"
 #include "Utilities.hpp"
-#include "Threads/TaskQueue.hpp"
+#include "Threads/SerialTaskQueue.hpp"
 
 #include <chrono>
 
@@ -54,8 +54,8 @@ void runTaskQueueTests()
 {
     tlog << "Thread Tests";
         
-    gusc::Threads::TaskQueue t1;
-    gusc::Threads::TaskQueue t2;
+    gusc::Threads::SerialTaskQueue t1;
+    gusc::Threads::SerialTaskQueue t2;
     
     tlog << "Main thread ID: " + tidToStr(std::this_thread::get_id());
 

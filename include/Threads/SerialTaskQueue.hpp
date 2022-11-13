@@ -1,13 +1,13 @@
 //
-//  TaskQueue.hpp
+//  SerialTaskQueue.hpp
 //  Threads
 //
 //  Created by Gusts Kaksis on 11/11/2022.
 //  Copyright © 2022 Gusts Kaksis. All rights reserved.
 //
 
-#ifndef TaskQueue_hpp
-#define TaskQueue_hpp
+#ifndef SerialTaskQueue_hpp
+#define SerialTaskQueue_hpp
 
 #include "Thread.hpp"
 #include <set>
@@ -18,8 +18,8 @@
 namespace gusc::Threads
 {
 
-/// @brief Class representing a new thread
-class TaskQueue
+/// @brief Class representing a serial task queue running on a single thread
+class SerialTaskQueue
 {
     class Task;
     
@@ -84,23 +84,23 @@ public:
         std::future<void> future;
     };
     
-    TaskQueue()
-        : TaskQueue(localThread)
+    SerialTaskQueue()
+        : SerialTaskQueue(localThread)
     {};
-    TaskQueue(Thread& initThread)
+    SerialTaskQueue(Thread& initThread)
         : thread(initThread)
     {
         if (!thread.getIsRunning())
         {
             thread.start();
         }
-        thread.run(std::bind(&TaskQueue::runLoop, this));
+        thread.run(std::bind(&SerialTaskQueue::runLoop, this));
     }
-    TaskQueue(const TaskQueue&) = delete;
-    TaskQueue& operator=(const TaskQueue&) = delete;
-    TaskQueue(TaskQueue&&) = delete;
-    TaskQueue& operator=(TaskQueue&&) = delete;
-    virtual ~TaskQueue()
+    SerialTaskQueue(const SerialTaskQueue&) = delete;
+    SerialTaskQueue& operator=(const SerialTaskQueue&) = delete;
+    SerialTaskQueue(SerialTaskQueue&&) = delete;
+    SerialTaskQueue& operator=(SerialTaskQueue&&) = delete;
+    virtual ~SerialTaskQueue()
     {
         isRunning = false;
         queueWait.notify_all();
@@ -429,4 +429,4 @@ private:
 
 }
 
-#endif /* TaskQueue_hpp */
+#endif /* SerialTaskQueue_hpp */
