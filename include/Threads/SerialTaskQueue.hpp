@@ -160,7 +160,7 @@ public:
             TaskHandleWithFuture<TReturn> handle(task, std::move(future));
             if (getIsSameThread())
             {
-                // If we are on the same thread excute task immediatelly to prent a deadlock
+                // If we are on the same thread excute task immediatelly to prevent a deadlock
                 task->execute();
             }
             else

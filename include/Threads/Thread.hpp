@@ -18,7 +18,8 @@
 namespace gusc::Threads
 {
 
-/// @brief Class representing a new thread
+/// @brief Class representing a new thread with delayed start
+/// Clas contains simple serial queue on which runnable objects can be posted and they will be executed in order they were posted
 class Thread
 {
 public:
@@ -77,7 +78,7 @@ public:
     {
         if (getIsRunning())
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            const std::lock_guard<decltype(mutex)> lock(mutex);
             queue.emplace(std::make_unique<RunnableWithObject<TCallable>>(newCallable));
             queueWait.notify_one();
         }
