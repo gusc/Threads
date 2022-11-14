@@ -19,9 +19,10 @@
 namespace gusc::Threads
 {
 
-/// @brief Class representing a serial task queue running on a single thread
-class SerialTaskQueue
+/// @brief Class representing a base task queue
+class TaskQueue
 {
+protected:
     class Task;
     
 public:
@@ -85,37 +86,61 @@ public:
         std::future<void> future;
     };
     
-    SerialTaskQueue()
-        : localThread(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
-        , thread(localThread)
+    template <typename T, typename M>
+    class LockedReference
     {
-        thread.start();
-    }
-    SerialTaskQueue(ThisThread& initThread)
-        : thread(initThread)
-    {
-        initThread.setThreadProc(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1));
-    }
-    SerialTaskQueue(const SerialTaskQueue&) = delete;
-    SerialTaskQueue& operator=(const SerialTaskQueue&) = delete;
-    SerialTaskQueue(SerialTaskQueue&&) = delete;
-    SerialTaskQueue& operator=(SerialTaskQueue&&) = delete;
-    ~SerialTaskQueue()
-    {
-        isStopping = true;
-        queueWait.notify_all();
+    public:
+        LockedReference(T& initRef, M& initMutex)
+            : ref(initRef)
+            , lock(initMutex) {}
+        LockedReference(const LockedReference&) = delete;
+        LockedReference operator=(const LockedReference&) = delete;
+        LockedReference(LockedReference&&) = delete;
+        LockedReference operator=(LockedReference&&) = delete;
+        ~LockedReference() = default;
+        
+        inline T* operator->() noexcept
+        {
+            return &ref;
+        }
+        
+        inline T& operator*() noexcept
+        {
+            return ref;
+        }
+        
+        inline const T* operator->() const noexcept
+        {
+            return &ref;
+        }
+        
+        inline const T& operator*() const noexcept
+        {
+            return ref;
+        }
+        
+    private:
+        T& ref;
+        std::lock_guard<M> lock;
     };
+    
+    TaskQueue() = default;
+    TaskQueue(const TaskQueue&) = delete;
+    TaskQueue& operator=(const TaskQueue&) = delete;
+    TaskQueue(TaskQueue&&) = delete;
+    TaskQueue& operator=(TaskQueue&&) = delete;
+    ~TaskQueue() = default;
 
     /// @brief send a task that needs to be executed on this thread
     /// @param newTask - any callable object that will be executed on this thread
     template<typename TCallable>
     inline void send(const TCallable& newTask)
     {
-        if (!isStopping)
+        if (!getIsStopping())
         {
             std::lock_guard<std::mutex> lock(mutex);
             taskQueue.emplace(std::make_shared<TaskWithCallable<TCallable>>(newTask));
-            queueWait.notify_one();
+            notifyQueueChange();
         }
         else
         {
@@ -130,14 +155,14 @@ public:
     template<typename TCallable>
     inline TaskHandle sendDelayed(const TCallable& newTask, const std::chrono::milliseconds& timeout)
     {
-        if (!isStopping)
+        if (!getIsStopping())
         {
             std::lock_guard<std::mutex> lock(mutex);
             auto time = std::chrono::steady_clock::now() + timeout;
             auto task = std::make_shared<TaskWithCallable<TCallable>>(newTask);
             TaskHandle handle { task };
             delayedQueue.emplace(std::make_unique<DelayedTaskWrapper>(time, std::move(task)));
-            queueWait.notify_one();
+            notifyQueueChange();
             return handle;
         }
         else
@@ -152,7 +177,7 @@ public:
     template<typename TReturn, typename TCallable>
     inline TaskHandleWithFuture<TReturn> sendAsync(const TCallable& newTask)
     {
-        if (!isStopping)
+        if (!getIsStopping())
         {
             std::promise<TReturn> promise;
             auto future = promise.get_future();
@@ -167,7 +192,7 @@ public:
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 taskQueue.emplace(task);
-                queueWait.notify_one();
+                notifyQueueChange();
             }
             return handle;
         }
@@ -183,7 +208,7 @@ public:
     template<typename TReturn, typename TCallable>
     inline TReturn sendSync(const TCallable& newTask)
     {
-        if (isStopping)
+        if (getIsStopping())
         {
             throw std::runtime_error("Can not place a blocking task if the thread is not started");
         }
@@ -200,79 +225,18 @@ public:
     }
     
     /// @brief Check if we are on caller is on the same thread as the task queue
-    inline bool getIsSameThread() const noexcept
+    inline virtual bool getIsSameThread() const noexcept
     {
-        return thread.getId() == std::this_thread::get_id();
+        return true;
     }
     
-private:
-    inline void runLoop(const Thread::StopToken& stopToken)
+    /// @brief Get if task queue is about to stop - we should stop accepting new messages if it does
+    inline virtual bool getIsStopping() const noexcept
     {
-        while (!stopToken.getIsStopping())
-        {
-            std::shared_ptr<Task> next;
-            {
-                std::unique_lock<std::mutex> lock(mutex);
-                // Move delayed tasks to main queue
-                enqueueDelayedTasks();
-                // Get the next task from the main queue
-                if (!taskQueue.empty())
-                {
-                    next = std::move(taskQueue.front());
-                    taskQueue.pop();
-                }
-                else if (!delayedQueue.empty())
-                {
-                    // There are no tasks to process, but delayedQueue had some tasks, we can wait till delay expires
-                    queueWait.wait_until(lock, (*delayedQueue.begin())->getTime());
-                }
-                else if (!isStopping)
-                {
-                    // We wait for a new task to be pushed on any of the queues
-                    queueWait.wait(lock);
-                }
-            }
-            if (next)
-            {
-                next->execute();
-            }
-        }
-        isStopping = true;
-        runLeftovers();
+        return false;
     }
     
-    inline void enqueueDelayedTasks()
-    {
-        const auto timeNow = std::chrono::steady_clock::now();
-        for (auto it = delayedQueue.begin(); it != delayedQueue.end();)
-        {
-            if ((*it)->getTime() < timeNow)
-            {
-                auto ptr = (*it)->moveTask();
-                if (ptr)
-                {
-                    taskQueue.emplace(std::move(ptr));
-                }
-                it = delayedQueue.erase(it);
-            }
-            else
-            {
-                break;
-            }
-        }
-    }
-    
-    inline void runLeftovers()
-    {
-        // Process any leftover tasks
-        std::lock_guard<std::mutex> lock(mutex);
-        while (taskQueue.size())
-        {
-            taskQueue.front()->execute();
-            taskQueue.pop();
-        }
-    }
-    
+protected:
     /// @brief base class for thread task
     class Task
     {
@@ -417,14 +381,128 @@ private:
         const std::chrono::time_point<std::chrono::steady_clock> time {};
         std::shared_ptr<Task> task;
     };
-    
+
     std::mutex mutex;
-    std::atomic_bool isStopping { false };
     std::queue<std::shared_ptr<Task>> taskQueue;
     std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
+    
+    inline virtual void notifyQueueChange()
+    {}
+};
+
+/// @brief a class representing a task queue that's running serially on a single thread
+class SerialTaskQueue : public TaskQueue
+{
+public:
+    SerialTaskQueue()
+        : TaskQueue()
+        , localThread(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
+        , thread(localThread)
+    {
+        thread.start();
+    }
+    SerialTaskQueue(ThisThread& initThread)
+        : TaskQueue()
+        , thread(initThread)
+    {
+        initThread.setThreadProc(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1));
+    }
+    ~SerialTaskQueue()
+    {
+        isStopping = true;
+        queueWait.notify_all();
+    }
+    
+    /// @brief Check if we are on caller is on the same thread as the task queue
+    inline bool getIsSameThread() const noexcept override
+    {
+        return thread.getId() == std::this_thread::get_id();
+    }
+    
+protected:
+    
+    inline void notifyQueueChange() override
+    {
+        queueWait.notify_one();
+    }
+    
+    inline bool getIsStopping() const noexcept override
+    {
+        return isStopping;
+    }
+    
+private:
+    std::atomic_bool isStopping { false };
     std::condition_variable queueWait;
     Thread localThread;
     Thread& thread;
+    
+    inline void runLoop(const Thread::StopToken& stopToken)
+    {
+        while (!stopToken.getIsStopping())
+        {
+            std::shared_ptr<Task> next;
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                // Move delayed tasks to main queue
+                enqueueDelayedTasks();
+                // Get the next task from the main queue
+                if (!taskQueue.empty())
+                {
+                    next = std::move(taskQueue.front());
+                    taskQueue.pop();
+                }
+                else if (!delayedQueue.empty())
+                {
+                    // There are no tasks to process, but delayedQueue had some tasks, we can wait till delay expires
+                    queueWait.wait_until(lock, (*delayedQueue.begin())->getTime());
+                }
+                else if (!isStopping)
+                {
+                    // We wait for a new task to be pushed on any of the queues
+                    queueWait.wait(lock);
+                }
+            }
+            if (next)
+            {
+                next->execute();
+            }
+        }
+        isStopping = true;
+        runLeftovers();
+    }
+    
+    inline void enqueueDelayedTasks()
+    {
+        const auto timeNow = std::chrono::steady_clock::now();
+        for (auto it = delayedQueue.begin(); it != delayedQueue.end();)
+        {
+            if ((*it)->getTime() < timeNow)
+            {
+                auto ptr = (*it)->moveTask();
+                if (ptr)
+                {
+                    taskQueue.emplace(std::move(ptr));
+                }
+                it = delayedQueue.erase(it);
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+    
+    inline void runLeftovers()
+    {
+        // Process any leftover tasks
+        std::lock_guard<std::mutex> lock(mutex);
+        while (taskQueue.size())
+        {
+            taskQueue.front()->execute();
+            taskQueue.pop();
+        }
+    }
 };
 
 } // namespace gusc::Threads
