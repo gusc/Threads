@@ -237,7 +237,7 @@ public:
     /// @brief set a thread procedure to use on this thread
     inline void setThreadProc(const std::function<void(void)>& newProc)
     {
-        setRunnable([newProc](const StopToken& token){
+        setRunnable([newProc](const StopToken&){
             newProc();
         });
     }
@@ -253,6 +253,10 @@ public:
             run();
             setIsStarted(false);
             return token;
+        }
+        else
+        {
+            throw std::runtime_error("Thread has already started");
         }
     }
     
