@@ -97,6 +97,7 @@ public:
     ~TaskQueue()
     {
         setAcceptsTasks(false);
+        notifyQueueChange();
     }
 
     /// @brief send a task that needs to be executed on this thread
@@ -410,7 +411,7 @@ protected:
             if (auto queue = q.lock())
             {
                 auto nextTime = queue->enqueueDelayedTasks(timeNow);
-                if (nextTime < timeNext)
+                if (nextTime != timeNow && (nextTime < timeNext || timeNext == timeNow))
                 {
                     timeNext = nextTime;
                 }
