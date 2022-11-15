@@ -78,11 +78,13 @@ public:
     };
     
     Thread() = default;
-    Thread(const std::function<void(const StopToken&)>& initFunction)
-        : runnable(initFunction)
+    Thread(const std::function<void(const StopToken&)>& initThreadProcedure)
+        : threadProcedure(initThreadProcedure)
     {}
-    Thread(const std::function<void(void)>& initFunction)
-        : runnable([initFunction](const StopToken&){initFunction();})
+    Thread(const std::function<void(void)>& initThreadProcedure)
+        : threadProcedure([initThreadProcedure](const StopToken&){
+            initThreadProcedure();
+        })
     {}
     Thread(const Thread&) = delete;
     Thread& operator=(const Thread&) = delete;
@@ -174,11 +176,11 @@ protected:
     {
         startToken.isStarted = true;
         startPromise.set_value();
-        if (runnable)
+        if (threadProcedure)
         {
             try
             {
-                runnable(stopToken);
+                threadProcedure(stopToken);
             }
             catch (...)
             {
@@ -204,11 +206,11 @@ protected:
         stopToken = StopToken{};
     }
     
-    inline void setRunnable(const std::function<void(const StopToken&)>& newRunnable)
+    inline void changeThreadProcedure(const std::function<void(const StopToken&)>& newThreadProcedure)
     {
         if (!getIsStarted())
         {
-            runnable = newRunnable;
+            threadProcedure = newThreadProcedure;
         }
         else
         {
@@ -221,7 +223,7 @@ private:
     std::promise<void> startPromise;
     StartToken startToken;
     StopToken stopToken;
-    std::function<void(const StopToken&)> runnable;
+    std::function<void(const StopToken&)> threadProcedure;
     std::thread thread;
 };
 
@@ -230,14 +232,14 @@ class ThisThread : public Thread
 {
 public:
     /// @brief set a thread procedure to use on this thread with StopToken
-    inline void setThreadProc(const std::function<void(const StopToken&)>& newProc)
+    inline void setThreadProcedure(const std::function<void(const StopToken&)>& newProc)
     {
-        setRunnable(newProc);
+        changeThreadProcedure(newProc);
     }
     /// @brief set a thread procedure to use on this thread
-    inline void setThreadProc(const std::function<void(void)>& newProc)
+    inline void setThreadProcedure(const std::function<void(void)>& newProc)
     {
-        setRunnable([newProc](const StopToken&){
+        changeThreadProcedure([newProc](const StopToken&){
             newProc();
         });
     }

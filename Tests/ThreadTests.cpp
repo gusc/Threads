@@ -122,7 +122,7 @@ void runThreadTests()
     // Test ThisThread
     {
         gusc::Threads::ThisThread tt;
-        tt.setThreadProc([&](const gusc::Threads::Thread::StopToken& token){
+        tt.setThreadProcedure([&](const gusc::Threads::Thread::StopToken& token){
             tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
             tt.stop();
             if (token.getIsStopping())
@@ -131,6 +131,13 @@ void runThreadTests()
             }
         });
         tt.start();
+    }
+    
+    // Test ThreadPool
+    {
+        auto tp = gusc::Threads::ThreadPool(2, [&](const gusc::Threads::Thread::StopToken& token){
+            tlog << "Running on a thread pool thread ID: " + tidToStr(std::this_thread::get_id());
+        });
     }
     
     tlog.flush();

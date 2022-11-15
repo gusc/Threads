@@ -511,7 +511,7 @@ public:
         })
         , thread(initThread)
     {
-        initThread.setThreadProc(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1));
+        initThread.setThreadProcedure(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1));
         setThreadId(thread.getId());
     }
     ~SerialTaskQueue()
