@@ -221,7 +221,6 @@ public:
     inline void cancelAll() noexcept
     {
         const std::lock_guard<decltype(mutex)> lock(mutex);
-        setAcceptsTasks(false);
         delayedQueue.clear();
         while (taskQueue.size())
         {
