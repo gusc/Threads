@@ -8,7 +8,7 @@
 
 #include "TaskQueueTests.hpp"
 #include "Utilities.hpp"
-#include "Threads/SerialTaskQueue.hpp"
+#include "Threads/TaskQueue.hpp"
 
 #include <chrono>
 

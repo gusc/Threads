@@ -9,7 +9,7 @@
 #ifndef Signal_hpp
 #define Signal_hpp
 
-#include "SerialTaskQueue.hpp"
+#include "TaskQueue.hpp"
 
 #include <tuple>
 #include <map>

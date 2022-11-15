@@ -5,7 +5,7 @@ option(Threads_BuildTests "Build the unit tests when BUILD_TESTING is enabled." 
 
 set(SOURCES
 	"include/Threads/Signal.hpp"
-    "include/Threads/SerialTaskQueue.hpp"
+    "include/Threads/TaskQueue.hpp"
 	"include/Threads/Thread.hpp"
     "include/Threads/ThreadPool.hpp"
     "include/Threads/Utilities.hpp"
