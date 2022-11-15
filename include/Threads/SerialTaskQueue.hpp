@@ -92,7 +92,10 @@ public:
     TaskQueue& operator=(const TaskQueue&) = delete;
     TaskQueue(TaskQueue&&) = delete;
     TaskQueue& operator=(TaskQueue&&) = delete;
-    ~TaskQueue() = default;
+    ~TaskQueue()
+    {
+        setAcceptsTasks(false);
+    }
 
     /// @brief send a task that needs to be executed on this thread
     /// @param newTask - any callable object that will be executed on this thread
@@ -101,7 +104,7 @@ public:
     {
         if (getAcceptsTasks())
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            const std::lock_guard<decltype(mutex)> lock(mutex);
             taskQueue.emplace(std::make_shared<TaskWithCallable<TCallable>>(newTask));
             notifyQueueChange();
         }
@@ -120,7 +123,7 @@ public:
     {
         if (getAcceptsTasks())
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            const std::lock_guard<decltype(mutex)> lock(mutex);
             auto time = std::chrono::steady_clock::now() + timeout;
             auto task = std::make_shared<TaskWithCallable<TCallable>>(newTask);
             TaskHandle handle { task };
@@ -153,7 +156,7 @@ public:
             }
             else
             {
-                std::lock_guard<std::mutex> lock(mutex);
+                const std::lock_guard<decltype(mutex)> lock(mutex);
                 taskQueue.emplace(task);
                 notifyQueueChange();
             }
@@ -199,24 +202,49 @@ public:
         return acceptsTasks;
     }
     
+    /// @brief Cancel all the tasks
+    inline void cancelAll() noexcept
+    {
+        const std::lock_guard<decltype(mutex)> lock(mutex);
+        delayedQueue.clear();
+        while (taskQueue.size())
+        {
+            taskQueue.pop();
+        }
+    }
+    
 protected:
     /// @brief base class for thread task
     class Task
     {
     public:
         virtual ~Task() = default;
-        virtual void execute() {}
+        inline void execute() {
+            const std::lock_guard<decltype(mutex)> lock(mutex);
+            if (!isCancelled)
+            {
+                privateExecute();
+            }
+            isExecuted = true;
+        }
         inline void cancel() noexcept
         {
-            isCancelled = true;
+            const std::lock_guard<decltype(mutex)> lock(mutex);
+            if (!isCancelled && !isExecuted)
+            {
+                isCancelled = true;
+                privateCancel();
+            }
         }
     protected:
-        inline bool getIsCancelled() const noexcept
-        {
-            return isCancelled;
-        }
+        
+        virtual void privateExecute() = 0;
+        virtual void privateCancel() = 0;
+        
     private:
-        std::atomic_bool isCancelled { false };
+        std::recursive_mutex mutex;
+        bool isCancelled { false };
+        bool isExecuted { false };
     };
     
     /// @brief templated task to wrap a callable object
@@ -227,20 +255,17 @@ protected:
         TaskWithCallable(const TCallable& initCallableObject)
             : callableObject(initCallableObject)
         {}
-        inline void execute() override
+        ~TaskWithCallable() override
         {
-            try
-            {
-                if (!getIsCancelled())
-                {
-                    callableObject();
-                }
-            }
-            catch(...)
-            {
-                // We can't do nothing as nobody is listening, but we don't want the thread to explode
-            }
+            cancel();
         }
+    protected:
+        inline void privateExecute() override
+        {
+            callableObject();
+        }
+        inline void privateCancel() override
+        {}
     private:
         TCallable callableObject;
     };
@@ -254,31 +279,33 @@ protected:
             : callableObject(initCallableObject)
             , waitablePromise(std::move(initWaitablePromise))
         {}
-        inline void execute() override
+        ~TaskWithPromise() override
         {
-            if (!getIsCancelled())
+            cancel();
+        }
+    protected:
+        inline void privateExecute() override
+        {
+            privateExecute<TReturn>();
+        }
+        inline void privateCancel() override
+        {
+            try
             {
-                actualCall<TReturn>();
+                // As this task was cancelled we report back a broken promise exception
+                waitablePromise.set_exception(std::make_exception_ptr(std::future_error(std::future_errc::broken_promise)));
             }
-            else
+            catch(...)
             {
-                try
-                {
-                    // As this task was cancelled we report back a broken promise exception
-                    waitablePromise.set_exception(std::make_exception_ptr(std::future_error(std::future_errc::broken_promise)));
-                }
-                catch(...)
-                {
-                    // We can't do nothing as nobody is listening, but we don't want the thread to explode
-                }
+                // We can't do nothing as nobody is listening, but we don't want the thread to explode
             }
         }
     private:
         TCallable callableObject;
         std::promise<TReturn> waitablePromise;
         
-        template<typename TRet>
-        void actualCall()
+        template<typename T>
+        inline void privateExecute()
         {
             try
             {
@@ -286,19 +313,12 @@ protected:
             }
             catch(...)
             {
-                try
-                {
-                    waitablePromise.set_exception(std::current_exception());
-                }
-                catch(...)
-                {
-                    // We can't do nothing as nobody is listening, but we don't want the thread to explode
-                }
+                waitablePromise.set_exception(std::current_exception());
             }
         }
         
         template<>
-        inline void actualCall<void>()
+        inline void privateExecute<void>()
         {
             try
             {
@@ -307,14 +327,7 @@ protected:
             }
             catch(...)
             {
-                try
-                {
-                    waitablePromise.set_exception(std::current_exception());
-                }
-                catch(...)
-                {
-                    // We can't do nothing as nobody is listening, but we don't want the thread to explode
-                }
+                waitablePromise.set_exception(std::current_exception());
             }
         }
     };
@@ -373,11 +386,13 @@ protected:
     
     inline void setThreadId(std::thread::id newThreadId)
     {
+        const std::lock_guard<decltype(mutex)> lock(mutex);
         threadId = newThreadId;
     }
     
     inline void setAcceptsTasks(bool newAcceptsTasks)
     {
+        const std::lock_guard<decltype(mutex)> lock(mutex);
         acceptsTasks = newAcceptsTasks;
     }
     
@@ -459,7 +474,14 @@ private:
             }
             if (next)
             {
-                next->execute();
+                try
+                {
+                    next->execute();
+                }
+                catch (...)
+                {
+                    // We can't do nothing as nobody is listening, but we don't want the thread to explode
+                }
             }
             else if (nextTaskTime != timeNow)
             {
