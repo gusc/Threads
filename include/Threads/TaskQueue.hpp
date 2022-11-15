@@ -499,7 +499,7 @@ public:
         : TaskQueue([this](){
             queueWait.notify_one();
         })
-        , localThread(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
+        , localThread("gusc::Threads::SerialTaskQueue", std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
         , thread(localThread)
     {
         thread.start();
