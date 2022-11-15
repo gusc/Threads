@@ -453,7 +453,7 @@ protected:
         }
     }
     
-    inline LockedReference<std::queue<std::shared_ptr<Task>>, std::mutex> acquireTaskQueue()
+    inline LockedReference<std::queue<std::shared_ptr<Task>>, std::recursive_mutex> acquireTaskQueue()
     {
         {
             // Move all the subqueue tasks to this task queue
@@ -482,7 +482,7 @@ protected:
     }
     
 private:
-    std::mutex mutex;
+    std::recursive_mutex mutex;
     std::thread::id threadId { std::this_thread::get_id() };
     std::atomic_bool acceptsTasks { true };
     std::queue<std::shared_ptr<Task>> taskQueue;
@@ -534,7 +534,7 @@ private:
     {
         while (!stopToken.getIsStopping())
         {
-            std::unique_lock<std::mutex> lock(waitMutex);
+            std::unique_lock<decltype(waitMutex)> lock(waitMutex);
             std::shared_ptr<Task> next;
             // Move delayed tasks to main queue
             const auto timeNow = std::chrono::steady_clock::now();
