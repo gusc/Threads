@@ -87,7 +87,9 @@ public:
         std::future<void> future;
     };
     
-    TaskQueue() = default;
+    TaskQueue(const std::function<void(void)>& initQueueNotifyCallback)
+        : queueNotifyCallback(initQueueNotifyCallback)
+    {}
     TaskQueue(const TaskQueue&) = delete;
     TaskQueue& operator=(const TaskQueue&) = delete;
     TaskQueue(TaskQueue&&) = delete;
@@ -396,8 +398,13 @@ protected:
         acceptsTasks = newAcceptsTasks;
     }
     
-    inline virtual void notifyQueueChange()
-    {}
+    inline void notifyQueueChange()
+    {
+        if (queueNotifyCallback)
+        {
+            queueNotifyCallback();
+        }
+    }
     
     inline LockedReference<std::queue<std::shared_ptr<Task>>, std::mutex> acquireTaskQueue()
     {
@@ -410,6 +417,7 @@ private:
     std::atomic_bool acceptsTasks { true };
     std::queue<std::shared_ptr<Task>> taskQueue;
     std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
+    std::function<void(void)> queueNotifyCallback { nullptr };
 };
 
 /// @brief a class representing a task queue that's running serially on a single thread
@@ -417,7 +425,9 @@ class SerialTaskQueue : public TaskQueue
 {
 public:
     SerialTaskQueue()
-        : TaskQueue()
+        : TaskQueue([this](){
+            queueWait.notify_one();
+        })
         , localThread(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
         , thread(localThread)
     {
@@ -425,7 +435,9 @@ public:
         setThreadId(thread.getId());
     }
     SerialTaskQueue(ThisThread& initThread)
-        : TaskQueue()
+        : TaskQueue([this](){
+            queueWait.notify_one();
+        })
         , thread(initThread)
     {
         initThread.setThreadProc(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1));
@@ -439,13 +451,6 @@ public:
             thread.stop();
         }
         queueWait.notify_all();
-    }
-    
-protected:
-    
-    inline void notifyQueueChange() override
-    {
-        queueWait.notify_one();
     }
     
 private:
