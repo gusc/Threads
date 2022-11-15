@@ -192,6 +192,18 @@ public:
         sendSync<void>(newTask);
     }
     
+    /// @brief Create a sub-queue that who's ownership will be transfered to the caller
+    inline std::shared_ptr<TaskQueue> createSubQueue()
+    {
+        auto subQueue = std::make_shared<TaskQueue>([this](){
+            notifyQueueChange();
+        });
+        subQueue->setThreadId(threadId);
+        subQueue->setAcceptsTasks(getAcceptsTasks());
+        subQueues.push_back(subQueue);
+        return subQueue;
+    }
+    
     /// @brief Check if we are on caller is on the same thread as the task queue
     inline bool getIsSameThread() const noexcept
     {
@@ -208,10 +220,18 @@ public:
     inline void cancelAll() noexcept
     {
         const std::lock_guard<decltype(mutex)> lock(mutex);
+        setAcceptsTasks(false);
         delayedQueue.clear();
         while (taskQueue.size())
         {
             taskQueue.pop();
+        }
+        for (auto& q : subQueues)
+        {
+            if (auto queue = q.lock())
+            {
+                queue->cancelAll();
+            }
         }
     }
     
@@ -379,23 +399,50 @@ protected:
                 break;
             }
         }
+        auto timeNext = timeNow;
         if (!delayedQueue.empty())
         {
-            return (*delayedQueue.begin())->getTime();
+            timeNext = (*delayedQueue.begin())->getTime();
         }
-        return timeNow;
+        // Check for sub-queue closest delayed task deadline
+        for (auto q : subQueues)
+        {
+            if (auto queue = q.lock())
+            {
+                auto nextTime = queue->enqueueDelayedTasks(timeNow);
+                if (nextTime < timeNext)
+                {
+                    timeNext = nextTime;
+                }
+            }
+        }
+        return timeNext;
     }
     
     inline void setThreadId(std::thread::id newThreadId)
     {
         const std::lock_guard<decltype(mutex)> lock(mutex);
         threadId = newThreadId;
+        for (auto& q : subQueues)
+        {
+            if (auto queue = q.lock())
+            {
+                queue->setThreadId(newThreadId);
+            }
+        }
     }
     
     inline void setAcceptsTasks(bool newAcceptsTasks)
     {
         const std::lock_guard<decltype(mutex)> lock(mutex);
         acceptsTasks = newAcceptsTasks;
+        for (auto& q : subQueues)
+        {
+            if (auto queue = q.lock())
+            {
+                queue->setAcceptsTasks(newAcceptsTasks);
+            }
+        }
     }
     
     inline void notifyQueueChange()
@@ -408,6 +455,29 @@ protected:
     
     inline LockedReference<std::queue<std::shared_ptr<Task>>, std::mutex> acquireTaskQueue()
     {
+        {
+            // Move all the subqueue tasks to this task queue
+            const std::lock_guard<decltype(mutex)> lock(mutex);
+            auto it = subQueues.begin();
+            while (it != subQueues.end())
+            {
+                if (auto queue = it->lock())
+                {
+                    auto tasks = queue->acquireTaskQueue();
+                    while (tasks->size())
+                    {
+                        taskQueue.emplace(std::move(tasks->front()));
+                        tasks->pop();
+                    }
+                    ++it;
+                }
+                else
+                {
+                    // Remove sub-queue that might be destroyed by it's owner
+                    it = subQueues.erase(it);
+                }
+            }
+        }
         return { taskQueue, mutex };
     }
     
@@ -417,6 +487,7 @@ private:
     std::atomic_bool acceptsTasks { true };
     std::queue<std::shared_ptr<Task>> taskQueue;
     std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
+    std::vector<std::weak_ptr<TaskQueue>> subQueues;
     std::function<void(void)> queueNotifyCallback { nullptr };
 };
 
