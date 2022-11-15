@@ -164,6 +164,11 @@ public:
         return thread.get_id();
     }
     
+    inline bool getIsStarted() const noexcept
+    {
+        return isStarted;
+    }
+    
 protected:
     inline void run()
     {
@@ -185,11 +190,6 @@ protected:
     inline void setIsStarted(bool newIsStarted) noexcept
     {
         isStarted = newIsStarted;
-    }
-    
-    inline bool getIsStarted() const noexcept
-    {
-        return isStarted;
     }
     
     inline StartToken& createStartToken() noexcept
