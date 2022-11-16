@@ -361,7 +361,6 @@ private:
         const auto it = std::find(slots.begin(), slots.end(), slot);
         if (it != slots.end())
         {
-            const auto slotIndex = std::distance(slots.begin(), it);
             slots.erase(it);
             return true;
         }

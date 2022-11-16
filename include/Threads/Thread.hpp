@@ -235,10 +235,11 @@ protected:
     
     inline void setThreadName()
     {
+#if !defined(__APPLE__)
         if (!threadName.empty())
         {
             auto threadHandle = thread.native_handle();
-#if defined(_WIN32)
+#   if defined(_WIN32)
             // taken from https://docs.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2008/xcb2z8hs(v=vs.90)
             const DWORD MS_VC_EXCEPTION = 0x406D1388;
 #pragma pack(push,8)
@@ -262,11 +263,12 @@ protected:
             __except (EXCEPTION_EXECUTE_HANDLER)
             {
             }
-#elif defined(__linux__)
+#   elif defined(__linux__)
             pthread_setname_np(threadHandle, threadName.c_str());
-#endif
+#   endif
             // On Apple we can only set name of current thread (see run())
         }
+#endif
     }
     
 private:
