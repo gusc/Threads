@@ -14,7 +14,9 @@
 #include <tuple>
 #include <map>
 
-namespace gusc::Threads
+namespace gusc
+{
+namespace Threads
 {
 
 /// @brief class representing a signal connection and emission object
@@ -369,6 +371,7 @@ private:
 
 };
 
+}
 } // namespace gusc::Threads
     
 #endif /* Signal_hpp */

@@ -13,11 +13,13 @@
 #include <atomic>
 #include <future>
 
-#if !defined(WIN32)
+#if !defined(_WIN32)
 #   include <pthread.h>
 #endif
 
-namespace gusc::Threads
+namespace gusc
+{
+namespace Threads
 {
 
 /// @brief Class representing a new thread with delayed start
@@ -240,6 +242,7 @@ protected:
         {
             auto threadHandle = thread.native_handle();
 #   if defined(_WIN32)
+            auto threadId = GetThreadId(threadHandle);
             // taken from https://docs.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2008/xcb2z8hs(v=vs.90)
             const DWORD MS_VC_EXCEPTION = 0x406D1388;
 #pragma pack(push,8)
@@ -254,7 +257,7 @@ protected:
             THREADNAME_INFO Info;
             Info.dwType = 0x1000;
             Info.szName = threadName.c_str();
-            Info.dwThreadID = threadHandle;
+            Info.dwThreadID = threadId;
             Info.dwFlags = 0;
             __try
             {
@@ -325,6 +328,7 @@ public:
     {}
 };
     
+}
 } // namespace gusc::Threads
 
 #endif /* Thread_hpp */

@@ -17,7 +17,9 @@
 #include <future>
 #include <queue>
 
-namespace gusc::Threads
+namespace gusc
+{
+namespace Threads
 {
 
 /// @brief Class representing a base task queue
@@ -499,7 +501,9 @@ public:
         : TaskQueue([this](){
             queueWait.notify_one();
         })
-        , localThread("gusc::Threads::SerialTaskQueue", std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
+        , localThread("gusc::Threads::SerialTaskQueue", [this](const Thread::StopToken& token) {
+            runLoop(token);
+        })
         , thread(localThread)
     {
         thread.start();
@@ -511,7 +515,9 @@ public:
         })
         , thread(initThread)
     {
-        initThread.setThreadProcedure(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1));
+        initThread.setThreadProcedure([this](const Thread::StopToken& token) {
+            runLoop(token);
+        });
         setThreadId(thread.getId());
     }
     ~SerialTaskQueue()
@@ -586,6 +592,7 @@ private:
     }
 };
 
+}
 } // namespace gusc::Threads
 
 #endif /* SerialTaskQueue_hpp */

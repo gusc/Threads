@@ -6,6 +6,10 @@
 //  Copyright © 2020 Gusts Kaksis. All rights reserved.
 //
 
+#if defined(_WIN32)
+#   include <Windows.h>
+#endif
+
 #include "ThreadTests.hpp"
 #include "Utilities.hpp"
 #include "Threads/Thread.hpp"
@@ -69,7 +73,10 @@ void runThreadTests()
     {
         MethodWrapper o;
         o.callableMethod(token);
-        gusc::Threads::Thread t(std::bind(&MethodWrapper::callableMethod, &o, std::placeholders::_1));
+        // Can't use std::bind because MSVC is stupid
+        gusc::Threads::Thread t([&](const gusc::Threads::Thread::StopToken& token) {
+            o.callableMethod(token);
+        });
         t.start();
     }
     

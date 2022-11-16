@@ -6,6 +6,10 @@
 //  Copyright © 2020 Gusts Kaksis. All rights reserved.
 //
 
+#if defined(_WIN32)
+#   include <Windows.h>
+#endif
+
 #include "SignalTests.hpp"
 #include "Utilities.hpp"
 #include "Threads/Thread.hpp"

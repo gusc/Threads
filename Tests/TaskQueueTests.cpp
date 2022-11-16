@@ -6,6 +6,10 @@
 //  Copyright © 2022 Gusts Kaksis. All rights reserved.
 //
 
+#if defined(_WIN32)
+#   include <Windows.h>
+#endif
+
 #include "TaskQueueTests.hpp"
 #include "Utilities.hpp"
 #include "Threads/TaskQueue.hpp"
