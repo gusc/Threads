@@ -6,9 +6,14 @@
 //  Copyright © 2020 Gusts Kaksis. All rights reserved.
 //
 
+#if defined(_WIN32)
+#   include <Windows.h>
+#endif
+
 #include "ThreadTests.hpp"
 #include "Utilities.hpp"
 #include "Threads/Thread.hpp"
+#include "Threads/ThreadPool.hpp"
 
 #include <chrono>
 
@@ -19,11 +24,7 @@ namespace
 static Logger tlog;
 }
 
-class CustomThread : public gusc::Threads::Thread
-{
-};
-
-void callableFunction()
+static void callableFunction(const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Callable function thread ID: " + tidToStr(std::this_thread::get_id());
 }
@@ -31,7 +32,7 @@ void callableFunction()
 class MethodWrapper
 {
 public:
-    void callableMethod()
+    void callableMethod(const gusc::Threads::Thread::StopToken&)
     {
         tlog << "Callable method thread ID: " + tidToStr(std::this_thread::get_id());
     }
@@ -39,17 +40,17 @@ public:
 
 struct CallableStruct
 {
-    void operator()() const
+    void operator()(const gusc::Threads::Thread::StopToken&) const
     {
         tlog << "Callable struct thread ID: " + tidToStr(std::this_thread::get_id());
     }
 };
 
-static const auto globalConstLambda = [](){
+static const auto globalConstLambda = [](const gusc::Threads::Thread::StopToken&){
     tlog << "Global const lambda thread ID: " + tidToStr(std::this_thread::get_id());
 };
 
-static auto globalLambda = [](){
+static auto globalLambda = [](const gusc::Threads::Thread::StopToken&){
     tlog << "Global lambda thread ID: " + tidToStr(std::this_thread::get_id());
 };
 
@@ -57,143 +58,94 @@ static auto globalLambda = [](){
 void runThreadTests()
 {
     tlog << "Thread Tests";
-        
-    gusc::Threads::ThisThread mt;
-    gusc::Threads::Thread t1;
-    CustomThread t2;
-    
     tlog << "Main thread ID: " + tidToStr(std::this_thread::get_id());
 
-    // Test function
-    callableFunction();
-    mt.send(&callableFunction);
-    t1.send(&callableFunction);
-    t2.send(&callableFunction);
+    gusc::Threads::Thread::StopToken token;
+    
+    // Test simple function
+    {
+        callableFunction(token);
+        gusc::Threads::Thread t(callableFunction);
+        t.start();
+    }
     
     // Test object method
-    MethodWrapper o;
-    o.callableMethod();
-    mt.send(std::bind(&MethodWrapper::callableMethod, &o));
-    t1.send(std::bind(&MethodWrapper::callableMethod, &o));
-    t2.send(std::bind(&MethodWrapper::callableMethod, &o));
+    {
+        MethodWrapper o;
+        o.callableMethod(token);
+        // Can't use std::bind because MSVC is stupid
+        gusc::Threads::Thread t([&](const gusc::Threads::Thread::StopToken& token) {
+            o.callableMethod(token);
+        });
+        t.start();
+    }
     
     // Test callable struct
-    const CallableStruct cb;
-    cb();
-    mt.send(cb);
-    t1.send(cb);
-    t2.send(cb);
+    {
+        const CallableStruct cb;
+        cb(token);
+        gusc::Threads::Thread t(cb);
+        t.start();
+    }
 
     // Test callable struct temporary
-    mt.send(CallableStruct{});
-    t1.send(CallableStruct{});
-    t2.send(CallableStruct{});
+    {
+        gusc::Threads::Thread t(CallableStruct{});
+        t.start();
+    }
     
     // Test local lambda
-    auto localLambda = [](){
-        tlog << "Local lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    };
-    localLambda();
-    mt.send(localLambda);
-    t1.send(localLambda);
-    t2.send(localLambda);
+    {
+        auto localLambda = [](const gusc::Threads::Thread::StopToken&){
+            tlog << "Local lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        };
+        localLambda(token);
+        gusc::Threads::Thread t(localLambda);
+        t.start();
+    }
     
     // Test global lambda
-    globalLambda();
-    mt.send(globalLambda);
-    t1.send(globalLambda);
-    t2.send(globalLambda);
+    {
+        globalLambda(token);
+        gusc::Threads::Thread t(globalLambda);
+        t.start();
+    }
     
     // Test global const lambda
-    globalConstLambda();
-    mt.send(globalConstLambda);
-    t1.send(globalConstLambda);
-    t2.send(globalConstLambda);
+    {
+        globalConstLambda(token);
+        gusc::Threads::Thread t(globalConstLambda);
+        t.start();
+    }
     
     // Test anonymous lambda
-    mt.send([](){
-        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    t1.sendDelayed([](){
-        tlog << "Delayed message on thread ID: " + tidToStr(std::this_thread::get_id());
-        tlog.flush();
-    }, 1s);
-    t2.sendDelayed([](){
-        tlog << "Delayed message on thread ID: " + tidToStr(std::this_thread::get_id());
-        tlog.flush();
-    }, 2s);
-    t1.send([](){
-        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    t2.send([](){
-        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    
-    // Test blocking before start
-    try
     {
-        t1.sendWait([](){
-            tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        gusc::Threads::Thread t([](const gusc::Threads::Thread::StopToken&){
+            tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
         });
-    }
-    catch (const std::exception& ex)
-    {
-        tlog << ex.what();
+        t.start();
     }
     
-    mt.sendDelayed([&](){
-        tlog << "Stopping thread mt";
-        tlog.flush();
-        mt.stop();
-    }, 5s);
-    
-    // Signal main thread to quit (this effectivelly stops processing all the messages)
-    mt.stop();
-    // Start all threads and main run-loop
-    t1.start();
-    t2.start();
-    
-    // Test blocking calls
-    t1.sendWait([](){
-        tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    t2.sendWait([](){
-        tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    auto f1 = t1.sendAsync<int>([&]() -> int {
-        // Try to do a blocking call from the same thread
-        t1.sendWait([](){
-            tlog << "Sub blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+    // Test ThisThread
+    {
+        gusc::Threads::ThisThread tt;
+        tt.setThreadProcedure([&](const gusc::Threads::Thread::StopToken& token){
+            tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
+            tt.stop();
+            if (token.getIsStopping())
+            {
+                tlog << "This thread has been informed to stop";
+            }
         });
-        return 10;
-    });
-    auto f2 = t2.sendAsync<int>([]() -> int {
-        return 20;
-    });
-    auto res1 = t1.sendSync<int>([&]() -> int {
-        // Try to do a blocking call from the same thread
-        t1.sendWait([](){
-            tlog << "Sub blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        tt.start();
+    }
+    
+    // Test ThreadPool
+    {
+        auto tp = gusc::Threads::ThreadPool(2, [&](const gusc::Threads::Thread::StopToken& token){
+            tlog << "Running on a thread pool thread ID: " + tidToStr(std::this_thread::get_id());
         });
-        return 1;
-    });
-    auto res2 = t2.sendSync<int>([]() -> int {
-        return 2;
-    });
-    tlog << "Sync and async results" << std::to_string(f1.get()) << std::to_string(f2.get()) << std::to_string(res1) << std::to_string(res2);
+    }
+    
     tlog.flush();
-    
-    t1.sendDelayed([&](){
-        tlog << "Stopping thread t1";
-        tlog.flush();
-        t1.stop();
-    }, 5s);
-    t2.sendDelayed([&](){
-        tlog << "Stopping thread t2";
-        tlog.flush();
-        t2.stop();
-    }, 5s);
-    
-    mt.start();
-    std::this_thread::sleep_for(3s);
 }

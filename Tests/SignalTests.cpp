@@ -6,6 +6,10 @@
 //  Copyright © 2020 Gusts Kaksis. All rights reserved.
 //
 
+#if defined(_WIN32)
+#   include <Windows.h>
+#endif
+
 #include "SignalTests.hpp"
 #include "Utilities.hpp"
 #include "Threads/Thread.hpp"
@@ -76,7 +80,7 @@ public:
     }
 };
 
-class CustomThread : public gusc::Threads::Thread
+class CustomThread : public gusc::Threads::SerialTaskQueue
 {
 public:
     void listenSimple()
@@ -117,8 +121,10 @@ void runSignalTests()
 {
     slog << "Signal Tests";
     
-    gusc::Threads::ThisThread mt;
-    gusc::Threads::Thread t1;
+    gusc::Threads::ThisThread tt;
+    
+    gusc::Threads::SerialTaskQueue mt{tt};
+    gusc::Threads::SerialTaskQueue t1;
     
     MethodWrapper mw;
     CustomThread ct;
@@ -198,14 +204,11 @@ void runSignalTests()
         sigObject.emit(o);
     });
     
-    t1.start();
-    mt.sendDelayed([&](){
-        mt.stop();
-    }, 5s);
-    mt.stop();
-    mt.start();
-    t1.stop();
-    t1.join(); // Let this thread finish up
+    // Stop main thread runloop aswell
+    mt.send([&](){
+        tt.stop();
+    });
+    tt.start();
     
     // Disconnect
     sigSimple.disconnect(&mt, &simpleFunction);
