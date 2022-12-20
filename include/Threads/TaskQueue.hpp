@@ -244,12 +244,20 @@ protected:
     public:
         virtual ~Task() = default;
         inline void execute() {
-            const std::lock_guard<decltype(mutex)> lock(mutex);
-            if (!isCancelled)
+            bool shouldExecute = false;
             {
-                privateExecute();
+                const std::lock_guard<decltype(mutex)> lock(mutex);
+                shouldExecute = !isCancelled;
             }
-            isExecuted = true;
+            if (shouldExecute)
+            {
+                // Call this outside the lock to prevent deadlocking
+                privateExecute();
+                {
+                    const std::lock_guard<decltype(mutex)> lock(mutex);
+                    isExecuted = true;
+                }
+            }
         }
         inline void cancel() noexcept
         {
