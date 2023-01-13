@@ -51,6 +51,7 @@ public:
         inline void wait()
         {
             future.wait();
+            future.get(); // If there are any exceptions from the thread they will be re-thrown here
         }
     private:
         std::atomic_bool isStarted { false };
@@ -83,22 +84,61 @@ public:
         }
     };
     
+    class StartNotifier
+    {
+    public:
+        StartNotifier(std::promise<void>& initStartPromise, std::atomic_bool& initIsStarted)
+            : startPromise(initStartPromise)
+            , isStarted(initIsStarted)
+        {}
+        
+        inline void notify()
+        {
+            isStarted = true;
+            startPromise.set_value();
+        }
+        
+        inline void notifyException(const std::exception& ex)
+        {
+            startPromise.set_exception(std::make_exception_ptr(ex));
+        }
+
+    private:
+        std::promise<void>& startPromise;
+        std::atomic_bool& isStarted;
+    };
+    
     Thread() = default;
     Thread(const std::function<void(void)>& initThreadProcedure)
-        : threadProcedure([initThreadProcedure](const StopToken&){
+        : threadProcedure([initThreadProcedure](StartNotifier& startNotifier, const StopToken&){
+            startNotifier.notify();
             initThreadProcedure();
         })
     {}
     Thread(const std::string& initThreadName,const std::function<void(void)>& initThreadProcedure)
-        : threadProcedure([initThreadProcedure](const StopToken&){
+        : threadProcedure([initThreadProcedure](StartNotifier& startNotifier, const StopToken&){
+            startNotifier.notify();
             initThreadProcedure();
         })
         , threadName(initThreadName)
     {}
     Thread(const std::function<void(const StopToken&)>& initThreadProcedure)
+        : threadProcedure([initThreadProcedure](StartNotifier& startNotifier, const StopToken& stopToken){
+            startNotifier.notify();
+            initThreadProcedure(stopToken);
+        })
+    {}
+    Thread(const std::string& initThreadName,const std::function<void(const StopToken&)>& initThreadProcedure)
+        : threadProcedure([initThreadProcedure](StartNotifier& startNotifier, const StopToken& stopToken){
+            startNotifier.notify();
+            initThreadProcedure(stopToken);
+        })
+        , threadName(initThreadName)
+    {}
+    Thread(const std::function<void(StartNotifier&, const StopToken&)>& initThreadProcedure)
         : threadProcedure(initThreadProcedure)
     {}
-    Thread(const std::string& initThreadName, const std::function<void(const StopToken&)>& initThreadProcedure)
+    Thread(const std::string& initThreadName, const std::function<void(StartNotifier&, const StopToken&)>& initThreadProcedure)
         : threadProcedure(initThreadProcedure)
         , threadName(initThreadName)
     {}
@@ -197,18 +237,22 @@ protected:
             pthread_setname_np(threadName.c_str());
         }
 #endif
-        startToken.isStarted = true;
-        startPromise.set_value();
+        StartNotifier startNotifier { startPromise, isStarted };
         if (threadProcedure)
         {
             try
             {
-                threadProcedure(stopToken);
+                threadProcedure(startNotifier, stopToken);
             }
-            catch (...)
+            catch (const std::exception& ex)
             {
                 // Prevent the thread from crashing
+                startNotifier.notifyException(ex);
             }
+        }
+        else
+        {
+            startNotifier.notifyException(std::runtime_error("No thread procedure specified"));
         }
     }
     
@@ -229,7 +273,7 @@ protected:
         stopToken = StopToken{};
     }
     
-    inline void changeThreadProcedure(const std::function<void(const StopToken&)>& newThreadProcedure)
+    inline void changeThreadProcedure(const std::function<void(StartNotifier&, const StopToken&)>& newThreadProcedure)
     {
         if (!getIsStarted())
         {
@@ -285,7 +329,7 @@ private:
     std::promise<void> startPromise;
     StartToken startToken;
     StopToken stopToken;
-    std::function<void(const StopToken&)> threadProcedure;
+    std::function<void(StartNotifier&, const StopToken&)> threadProcedure;
     std::string threadName { "gust::Threads::Thread " };
     std::thread thread;
 };
@@ -295,14 +339,15 @@ class ThisThread : public Thread
 {
 public:
     /// @brief set a thread procedure to use on this thread with StopToken
-    inline void setThreadProcedure(const std::function<void(const StopToken&)>& newProc)
+    inline void setThreadProcedure(const std::function<void(StartNotifier&, const StopToken&)>& newProc)
     {
         changeThreadProcedure(newProc);
     }
     /// @brief set a thread procedure to use on this thread
     inline void setThreadProcedure(const std::function<void(void)>& newProc)
     {
-        changeThreadProcedure([newProc](const StopToken&){
+        changeThreadProcedure([newProc](StartNotifier& startNotifier, const StopToken&){
+            startNotifier.notify();
             newProc();
         });
     }

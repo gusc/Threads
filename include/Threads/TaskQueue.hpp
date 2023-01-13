@@ -509,8 +509,9 @@ public:
         : TaskQueue([this](){
             queueWait.notify_one();
         })
-        , localThread("gusc::Threads::SerialTaskQueue", [this](const Thread::StopToken& token) {
-            runLoop(token);
+        , localThread("gusc::Threads::SerialTaskQueue", [this](Thread::StartNotifier& startNotifier, const Thread::StopToken& stopToken) {
+            startNotifier.notify();
+            runLoop(stopToken);
         })
         , thread(localThread)
     {
@@ -523,8 +524,9 @@ public:
         })
         , thread(initThread)
     {
-        initThread.setThreadProcedure([this](const Thread::StopToken& token) {
-            runLoop(token);
+        initThread.setThreadProcedure([this](Thread::StartNotifier& startNotifier, const Thread::StopToken& stopToken) {
+            startNotifier.notify();
+            runLoop(stopToken);
         });
         setThreadId(thread.getId());
     }
