@@ -84,17 +84,23 @@ public:
     };
     
     Thread() = default;
+    Thread(const std::function<void(void)>& initThreadProcedure)
+        : threadProcedure([initThreadProcedure](const StopToken&){
+            initThreadProcedure();
+        })
+    {}
+    Thread(const std::string& initThreadName,const std::function<void(void)>& initThreadProcedure)
+        : threadProcedure([initThreadProcedure](const StopToken&){
+            initThreadProcedure();
+        })
+        , threadName(initThreadName)
+    {}
     Thread(const std::function<void(const StopToken&)>& initThreadProcedure)
         : threadProcedure(initThreadProcedure)
     {}
     Thread(const std::string& initThreadName, const std::function<void(const StopToken&)>& initThreadProcedure)
         : threadProcedure(initThreadProcedure)
         , threadName(initThreadName)
-    {}
-    Thread(const std::function<void(void)>& initThreadProcedure)
-        : threadProcedure([initThreadProcedure](const StopToken&){
-            initThreadProcedure();
-        })
     {}
     Thread(const Thread&) = delete;
     Thread& operator=(const Thread&) = delete;
@@ -185,14 +191,14 @@ public:
 protected:
     inline void run()
     {
-        startToken.isStarted = true;
-        startPromise.set_value();
 #if defined(__APPLE__)
         if (!threadName.empty())
         {
             pthread_setname_np(threadName.c_str());
         }
 #endif
+        startToken.isStarted = true;
+        startPromise.set_value();
         if (threadProcedure)
         {
             try
@@ -280,7 +286,7 @@ private:
     StartToken startToken;
     StopToken stopToken;
     std::function<void(const StopToken&)> threadProcedure;
-    std::string threadName;
+    std::string threadName { "gust::Threads::Thread " };
     std::thread thread;
 };
 
