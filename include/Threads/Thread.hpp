@@ -210,6 +210,8 @@ protected:
                 // Prevent the thread from crashing
             }
         }
+        // The thread procedure has finished so the thread will stop now
+        setIsStarted(false);
     }
     
     inline void setIsStarted(bool newIsStarted) noexcept
@@ -316,7 +318,6 @@ public:
             createStopToken();
             auto& token = createStartToken();
             run();
-            setIsStarted(false);
             return token;
         }
         else
