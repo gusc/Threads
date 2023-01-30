@@ -147,5 +147,18 @@ void runThreadTests()
         });
     }
     
+    // Test start/stop
+    {
+        gusc::Threads::Thread t([](const gusc::Threads::Thread::StopToken&){
+            tlog << "Starting thread ID: " + tidToStr(std::this_thread::get_id());
+        });
+        t.start();
+        t.stop();
+        t.join();
+        t.start();
+        t.stop();
+        t.join();
+    }
+    
     tlog.flush();
 }

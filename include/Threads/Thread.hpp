@@ -121,6 +121,12 @@ public:
         if (!getIsStarted())
         {
             setIsStarted(true);
+            createStartToken();
+            // If the thread was already constructed previously we need to detach it first otherwise it will throw
+            if (thread.joinable())
+            {
+                thread.detach();
+            }
             thread = std::thread{ &Thread::run, this };
             setThreadName();
             return startToken;
