@@ -195,7 +195,7 @@ public:
         sendSync<void>(newTask);
     }
     
-    /// @brief Create a sub-queue that who's ownership will be transfered to the caller
+    /// @brief Create a sub-queue who's ownership will be transfered to the caller
     inline std::shared_ptr<TaskQueue> createSubQueue()
     {
         auto subQueue = std::make_shared<TaskQueue>([this](){
