@@ -19,6 +19,14 @@ namespace gusc
 namespace Threads
 {
 
+/// @brief generic interface for opened signal connections
+class SignalConnection
+{
+public:
+    virtual ~SignalConnection() = default;
+    virtual void close() {}
+};
+
 /// @brief class representing a signal connection and emission object
 template<typename ...TArg>
 class Signal
@@ -116,7 +124,7 @@ public:
     Signal& operator=(Signal<TArg...>&& other) = delete;
     ~Signal() = default;
     
-    class Connection
+    class Connection : public SignalConnection
     {
     public:
         Connection(Signal* initSignal, std::weak_ptr<Slot> initSlot)
@@ -144,7 +152,7 @@ public:
         }
         
         /// @brief close the signal connection
-        inline void close() noexcept
+        inline void close() override
         {
             if (signal)
             {
@@ -307,7 +315,7 @@ public:
     Signal& operator=(Signal<void>&& other) = delete;
     ~Signal() = default;
     
-    class Connection
+    class Connection : public SignalConnection
     {
     public:
         Connection(Signal* initSignal, std::weak_ptr<Slot> initSlot)
@@ -335,7 +343,7 @@ public:
         }
         
         /// @brief close the signal connection
-        inline void close() noexcept
+        inline void close() override
         {
             if (signal)
             {
