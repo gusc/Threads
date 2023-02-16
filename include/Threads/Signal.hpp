@@ -19,25 +19,68 @@ namespace gusc
 namespace Threads
 {
 
+/// @brief generic interface for opened signal connections
+class SignalConnection
+{
+public:
+    virtual ~SignalConnection() = default;
+    virtual void close() {}
+};
+
 /// @brief class representing a signal connection and emission object
 template<typename ...TArg>
 class Signal
 {
-    /// @brief internal class representing a single message that wraps the signal data and the listener and is dispatched to a listener's queue
-    class SignalMessage
+    /// @brief an internal abstract base class representing a signal callable wrapper
+    class CallableBase
     {
     public:
-        SignalMessage(const std::function<void(TArg...)>& initCallback, const TArg&... initData)
-            : callback(initCallback)
+        CallableBase() = default;
+        virtual ~CallableBase() = default;
+
+        virtual void operator()(const TArg&... args) = 0;
+
+    };
+
+    template<typename TCallable>
+    class CallableWrapper : public CallableBase
+    {
+    public:
+        CallableWrapper(const TCallable& initCallable)
+            : callable(initCallable)
+        {}
+
+        inline void operator()(const TArg&... args) override
+        {
+            callable(args...);
+        }
+
+    private:
+        TCallable callable;
+
+    };
+    
+    /// @brief internal class representing a single message that wraps the signal data and the signal callable and is dispatched to a listener's queue
+    class Message
+    {
+    public:
+        Message(std::weak_ptr<CallableBase>&& initCallable, const TArg&... initData)
+            : callable(initCallable)
             , data(initData...)
         {}
+
         inline void operator()()
         {
-            std::apply(callback, data);
+            if (auto c = callable.lock())
+            {
+                std::apply(*c, data);
+            }
         }
+
     private:
-        std::function<void(TArg...)> callback;
+        std::weak_ptr<CallableBase> callable;
         std::tuple<TArg...> data;
+
     };
     
     /// @brief internal class representing a signal connection slot (listener and it's affinity serial queue)
@@ -45,48 +88,31 @@ class Signal
     {
     public:
         Slot() = delete;
-        Slot(SerialTaskQueue* initHostQueue, void* initCallbackPtr, const std::function<void(TArg...)>& initCallback)
+        Slot(std::weak_ptr<TaskQueue> initHostQueue, std::shared_ptr<CallableBase>&& initCallable)
             : hostQueue(initHostQueue)
-            , callbackPtr(initCallbackPtr)
-            , callback(initCallback)
+            , callable(std::move(initCallable))
         {}
-        
-        inline void setConnectionId(size_t newConnectionId) noexcept
-        {
-            connectionId = newConnectionId;
-        }
-        
-        inline size_t getConnectionId() const noexcept
-        {
-            return connectionId;
-        }
-        
-        inline bool operator==(const Slot& other) const noexcept
-        {
-            return callbackPtr && hostQueue == other.hostQueue && callbackPtr != other.callbackPtr;
-        }
         
         inline void call(const TArg&... args) const
         {
-            if (!hostQueue)
+            auto queue = hostQueue.lock();
+            if (!queue)
             {
-                throw std::runtime_error("Host queue is null");
+                throw std::runtime_error("Host queue is gone");
             }
-            if (hostQueue->getIsSameThread())
+            if (queue->getIsSameThread())
             {
-                callback(args...);
+                (*callable)(args...);
             }
             else
             {
-                hostQueue->send(SignalMessage{callback, args...});
+                queue->send(Message{callable, args...});
             }
         }
         
     private:
-        SerialTaskQueue* hostQueue { nullptr };
-        void* callbackPtr { nullptr };
-        std::function<void(TArg...)> callback;
-        size_t connectionId { 0 };
+        std::weak_ptr<TaskQueue> hostQueue;
+        std::shared_ptr<CallableBase> callable;
 
     };
     
@@ -98,83 +124,67 @@ public:
     Signal& operator=(Signal<TArg...>&& other) = delete;
     ~Signal() = default;
     
-    /// @brief connect a listener callback to this signal
-    /// @param queue - listener's serial task queue
-    /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return connection ID for disconnecting the slot later or 0 if failed to insert the slot
-    inline size_t connect(SerialTaskQueue* queue, const std::function<void(const TArg&...)>& callback) noexcept
+    class Connection : public SignalConnection
     {
-        typedef void(fnType)(const TArg&...);
-        fnType* const* fnPointer = callback.template target<fnType*>();
-        return connect({queue, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
-    }
+    public:
+        Connection(Signal* initSignal, std::weak_ptr<Slot> initSlot)
+            : signal(initSignal)
+            , slot(initSlot)
+        {}
+        Connection(const Connection&) = delete;
+        Connection& operator=(const Connection&) = delete;
+        Connection(Connection&& other)
+            : signal(other.signal)
+            , slot(std::move(other.slot))
+        {
+            other.signal = nullptr;
+        }
+        Connection& operator=(Connection&& other)
+        {
+            signal = other.signal;
+            slot = std::move(other.slot);
+            other.signal = nullptr;
+            return *this;
+        }
+        ~Connection()
+        {
+            close();
+        }
+        
+        /// @brief close the signal connection
+        inline void close() override
+        {
+            if (signal)
+            {
+                signal->disconnect(slot);
+                signal = nullptr;
+            }
+        }
 
-    /// @brief connect a listener callback to this signal
-    /// @param queue - listener's serial task queue
-    /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return connection ID for disconnecting the slot later or 0 if failed to insert the slot
-    template<typename TClass>
-    inline size_t connect(TClass* queue, void(TClass::* callback)(const TArg&...)) noexcept
-    {
-        return connect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](const TArg&... args){(queue->*callback)(args...);}});
-    }
+    private:
+        Signal* signal;
+        std::weak_ptr<Slot> slot;
 
+    };
+    
     /// @brief connect a listener callback to this signal
-    /// @param queue - listener's serial task queue
+    /// @param queue - listener's task queue
     /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return connection ID for disconnecting the slot later or 0 if failed to insert the slot
-    template<typename TClass>
-    inline size_t connect(TClass* queue, void(TClass::* callback)(TArg...)) noexcept
-    {
-        return connect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](const TArg&... args){(queue->*callback)(args...);}});
-    }
-    
-    /// @brief disconnect a listener callback from this signal
-    /// @param queue - listener's serial task queue
-    /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return false if listener was not connected
-    inline bool disconnect(SerialTaskQueue* queue, const std::function<void(const TArg&...)>& callback) noexcept
-    {
-        typedef void(fnType)(const TArg&...);
-        fnType* const* fnPointer = callback.template target<fnType*>();
-        return disconnect({queue, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
-    }
-    
-    /// @brief disconnect a listener callback from this signal
-    /// @param queue - listener's serial task queue
-    /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return false if listener was not connected
-    template<typename TClass>
-    inline bool disconnect(TClass* queue, void(TClass::* callback)(const TArg&...)) noexcept
-    {
-        return disconnect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](const TArg&... args){(queue->*callback)(args...);}});
-    }
-
-    /// @brief disconnect a listener callback from this signal
-    /// @param queue - listener's serial task queue
-    /// @param callback - listener's callback that will be called when signal is emitted
-    /// @return false if listener was not connected
-    template<typename TClass>
-    inline bool disconnect(TClass* queue, void(TClass::* callback)(TArg...)) noexcept
-    {
-        return disconnect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](const TArg&... args){(queue->*callback)(args...);}});
-    }
-    
-    /// @brief disconnect a listener callback from this signal using it's connection ID
-    /// @param connectionId - a connection ID assigned and returned from connect() call
-    /// @return false if no listener with this connection ID was found
-    inline bool disconnect(const size_t connectionId) noexcept
+    /// @return connection object that holds the conection open until it's destroyed or Signal::Conenction::close() method is explicitly called
+    template<typename TCallable>
+    inline std::unique_ptr<Connection> connect(std::weak_ptr<TaskQueue> queue, const TCallable& callback) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
-        const auto it = std::find_if(slots.begin(), slots.end(), [&connectionId](const Slot& s){
-            return s.getConnectionId() == connectionId;
-        });
-        if (it != slots.end())
-        {
-            slots.erase(it);
-            return true;
-        }
-        return false;
+        std::shared_ptr<CallableBase> callable = std::make_shared<CallableWrapper<TCallable>>(callback);
+        auto& slot = slots.emplace_back(std::make_shared<Slot>(queue, std::move(callable)));
+        return std::make_unique<Connection>(this, slot);
+    }
+    
+    /// @brief disconnect all listeners from this signal
+    inline void disconnectAll() noexcept
+    {
+        std::lock_guard<std::mutex> lock(emitMutex);
+        slots.clear();
     }
     
     /// @brief emit the signal to all of it's listeneres
@@ -182,42 +192,25 @@ public:
     inline void emit(const TArg&... data) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
-        for (const auto& l : slots)
+        for (const auto& slot : slots)
         {
-            l.call(data...);
+            // TODO: think of ways to prevent locking emitMutex while calling
+            slot->call(data...);
         }
     }
     
 private:
-    std::vector<Slot> slots;
-    size_t uniqueIdCounter { 0 };
+    std::vector<std::shared_ptr<Slot>> slots;
     std::mutex emitMutex;
     
-    inline size_t connect(const Slot& slot) noexcept
+    inline bool disconnect(std::weak_ptr<Slot> slot) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
-        const auto it = std::find(slots.begin(), slots.end(), slot);
-        if (it == slots.end())
-        {
-            auto& s = slots.emplace_back(slot);
-            ++uniqueIdCounter;
-            s.setConnectionId(uniqueIdCounter);
-            return uniqueIdCounter;
-        }
-        else
-        {
-            return it->getConnectionId();
-        }
-        return 0;
-    }
-    
-    inline bool disconnect(const Slot& slot) noexcept
-    {
-        std::lock_guard<std::mutex> lock(emitMutex);
-        const auto it = std::find(slots.begin(), slots.end(), slot);
+        const auto it = std::find_if(slots.begin(), slots.end(), [&](const std::shared_ptr<Slot>& a){
+            return !slot.expired() && slot.lock() == a;
+        });
         if (it != slots.end())
         {
-            const auto slotIndex = std::distance(slots.begin(), it);
             slots.erase(it);
             return true;
         }
@@ -230,48 +223,86 @@ private:
 template<>
 class Signal<void>
 {
+    /// @brief an internal abstract base class representing a signal callable wrapper
+    class CallableBase
+    {
+    public:
+        CallableBase() = default;
+        virtual ~CallableBase() = default;
+
+        virtual void operator()() = 0;
+
+    };
+
+    template<typename TCallable>
+    class CallableWrapper : public CallableBase
+    {
+    public:
+        CallableWrapper(const TCallable& initCallable)
+            : callable(initCallable)
+        {}
+
+        inline void operator()() override
+        {
+            callable();
+        }
+
+    private:
+        TCallable callable;
+
+    };
+    
+    /// @brief internal class representing a single message that wraps the signal data and the signal callable and is dispatched to a listener's queue
+    class Message
+    {
+    public:
+        Message(std::weak_ptr<CallableBase>&& initCallable)
+            : callable(initCallable)
+        {}
+
+        inline void operator()()
+        {
+            if (auto c = callable.lock())
+            {
+                (*c)();
+            }
+        }
+
+    private:
+        std::weak_ptr<CallableBase> callable;
+
+    };
+    
+    /// @brief internal class representing a signal connection slot (listener and it's affinity serial queue)
     class Slot
     {
     public:
         Slot() = delete;
-        Slot(SerialTaskQueue* initHostQueue, void* initCallbackPtr, const std::function<void(void)>& initCallback)
+        Slot(std::weak_ptr<TaskQueue> initHostQueue, std::shared_ptr<CallableBase>&& initCallable)
             : hostQueue(initHostQueue)
-            , callbackPtr(initCallbackPtr)
-            , callback(initCallback)
+            , callable(std::move(initCallable))
         {}
         
-        inline void setConnectionId(size_t newConnectionId) noexcept
+        inline void call() const
         {
-            connectionId = newConnectionId;
-        }
-        
-        inline size_t getConnectionId() const noexcept
-        {
-            return connectionId;
-        }
-        
-        bool operator==(const Slot& other)
-        {
-            return callbackPtr && hostQueue == other.hostQueue && callbackPtr == other.callbackPtr;
-        }
-        
-        void call() const
-        {
-            if (hostQueue->getIsSameThread())
+            auto queue = hostQueue.lock();
+            if (!queue)
             {
-                callback();
+                throw std::runtime_error("Host queue is gone");
+            }
+            if (queue->getIsSameThread())
+            {
+                (*callable)();
             }
             else
             {
-                hostQueue->send(callback);
+                queue->send(Message{callable});
             }
         }
         
     private:
-        SerialTaskQueue* hostQueue { nullptr };
-        void* callbackPtr { nullptr };
-        std::function<void(void)> callback;
-        size_t connectionId { 0 };
+        std::weak_ptr<TaskQueue> hostQueue;
+        std::shared_ptr<CallableBase> callable;
 
     };
 
@@ -284,37 +315,92 @@ public:
     Signal& operator=(Signal<void>&& other) = delete;
     ~Signal() = default;
     
-    inline bool connect(SerialTaskQueue* queue, const std::function<void(void)>& callback) noexcept
+    class Connection : public SignalConnection
     {
-        typedef void(fnType)(void);
-        fnType* const* fnPointer = callback.target<fnType*>();
-        return connect({queue, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
-    }
-    
-    template<typename TClass>
-    inline bool connect(TClass* queue, void(TClass::* callback)(void)) noexcept
-    {
-        return connect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](){(queue->*callback)();}});
-    }
-    
-    inline bool disconnect(SerialTaskQueue* queue, const std::function<void(void)>& callback) noexcept
-    {
-        typedef void(fnType)(void);
-        fnType* const* fnPointer = callback.target<fnType*>();
-        return disconnect({queue, fnPointer ? reinterpret_cast<void*>(*fnPointer) : nullptr, callback});
-    }
-    
-    template<typename TClass>
-    inline bool disconnect(TClass* queue, void(TClass::* callback)(void)) noexcept
-    {
-        return disconnect(Slot{queue, reinterpret_cast<void*&>(callback), [queue, callback](){(queue->*callback)();}});
-    }
+    public:
+        Connection(Signal* initSignal, std::weak_ptr<Slot> initSlot)
+            : signal(initSignal)
+            , slot(initSlot)
+        {}
+        Connection(const Connection&) = delete;
+        Connection& operator=(const Connection&) = delete;
+        Connection(Connection&& other)
+            : signal(other.signal)
+            , slot(std::move(other.slot))
+        {
+            other.signal = nullptr;
+        }
+        Connection& operator=(Connection&& other)
+        {
+            signal = other.signal;
+            slot = std::move(other.slot);
+            other.signal = nullptr;
+            return *this;
+        }
+        ~Connection()
+        {
+            close();
+        }
+        
+        /// @brief close the signal connection
+        inline void close() override
+        {
+            if (signal)
+            {
+                signal->disconnect(slot);
+                signal = nullptr;
+            }
+        }
 
-    inline bool disconnect(const size_t connectionId) noexcept
+    private:
+        Signal* signal;
+        std::weak_ptr<Slot> slot;
+
+    };
+    
+    friend Connection;
+    
+    /// @brief connect a listener callback to this signal
+    /// @param queue - listener's task queue
+    /// @param callback - listener's callback that will be called when signal is emitted
+    /// @return connection object that holds the conection open until it's destroyed or Signal::Conenction::close() method is explicitly called
+    template<typename TCallable>
+    inline std::unique_ptr<Connection> connect(std::weak_ptr<TaskQueue> queue, const TCallable& callback) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
-        const auto it = std::find_if(slots.begin(), slots.end(), [&connectionId](const Slot& s){
-            return s.getConnectionId() == connectionId;
+        std::shared_ptr<CallableBase> callable = std::make_shared<CallableWrapper<TCallable>>(callback);
+        auto& slot = slots.emplace_back(std::make_shared<Slot>(queue, std::move(callable)));
+        return std::make_unique<Connection>(this, slot);
+    }
+    
+    /// @brief disconnect all listeners from this signal
+    inline void disconnectAll() noexcept
+    {
+        std::lock_guard<std::mutex> lock(emitMutex);
+        slots.clear();
+    }
+    
+    /// @brief emit the signal to all of it's listeneres
+    /// @param data - signal arguments
+    inline void emit() noexcept
+    {
+        std::lock_guard<std::mutex> lock(emitMutex);
+        for (const auto& slot : slots)
+        {
+            // TODO: think of ways to prevent locking emitMutex while calling
+            slot->call();
+        }
+    }
+
+private:
+    std::vector<std::shared_ptr<Slot>> slots;
+    std::mutex emitMutex;
+
+    inline bool disconnect(std::weak_ptr<Slot> slot) noexcept
+    {
+        std::lock_guard<std::mutex> lock(emitMutex);
+        const auto it = std::find_if(slots.begin(), slots.end(), [&](const std::shared_ptr<Slot>& a){
+            return !slot.expired() && slot.lock() == a;
         });
         if (it != slots.end())
         {
@@ -324,51 +410,6 @@ public:
         return false;
     }
     
-    inline void emit() noexcept
-    {
-        std::lock_guard<std::mutex> lock(emitMutex);
-        for (auto& l : slots)
-        {
-            l.call();
-        }
-    }
-    
-private:
-    std::vector<Slot> slots;
-    size_t uniqueIdCounter { 0 };
-    std::map<size_t, typename std::vector<Slot>::size_type> indexMap;
-    std::mutex emitMutex;
-    
-    inline bool connect(const Slot& slot) noexcept
-    {
-        std::lock_guard<std::mutex> lock(emitMutex);
-        const auto it = std::find(slots.begin(), slots.end(), slot);
-        if (it == slots.end())
-        {
-            auto& s = slots.emplace_back(slot);
-            ++uniqueIdCounter;
-            s.setConnectionId(uniqueIdCounter);
-            return uniqueIdCounter;
-        }
-        else
-        {
-            return it->getConnectionId();
-        }
-        return 0;
-    }
-    
-    inline bool disconnect(const Slot& slot) noexcept
-    {
-        std::lock_guard<std::mutex> lock(emitMutex);
-        const auto it = std::find(slots.begin(), slots.end(), slot);
-        if (it != slots.end())
-        {
-            slots.erase(it);
-            return true;
-        }
-        return false;
-    }
-
 };
 
 }
