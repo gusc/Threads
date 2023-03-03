@@ -162,7 +162,7 @@ public:
         }
 
     private:
-        Signal* signal;
+        Signal* signal { nullptr };
         std::weak_ptr<Slot> slot;
 
     };
@@ -353,7 +353,7 @@ public:
         }
 
     private:
-        Signal* signal;
+        Signal* signal { nullptr };
         std::weak_ptr<Slot> slot;
 
     };
