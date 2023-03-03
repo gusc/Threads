@@ -122,7 +122,13 @@ public:
     Signal& operator=(const Signal<TArg...>&) = delete;
     Signal(Signal<TArg...>&& other) = delete;
     Signal& operator=(Signal<TArg...>&& other) = delete;
-    ~Signal() = default;
+    ~Signal()
+    {
+        for (auto& c : connections)
+        {
+            c->close();
+        }
+    }
     
     class Connection : public SignalConnection
     {
@@ -130,18 +136,33 @@ public:
         Connection(Signal* initSignal, std::weak_ptr<Slot> initSlot)
             : signal(initSignal)
             , slot(initSlot)
-        {}
+        {
+            if (signal)
+            {
+                signal->registerConnection(this);
+            }
+        }
         Connection(const Connection&) = delete;
         Connection& operator=(const Connection&) = delete;
         Connection(Connection&& other)
             : signal(other.signal)
             , slot(std::move(other.slot))
         {
+            if (signal)
+            {
+                signal->unregisterConnection(&other);
+                signal->registerConnection(this);
+            }
             other.signal = nullptr;
         }
         Connection& operator=(Connection&& other)
         {
             signal = other.signal;
+            if (signal)
+            {
+                signal->unregisterConnection(&other);
+                signal->registerConnection(this);
+            }
             slot = std::move(other.slot);
             other.signal = nullptr;
             return *this;
@@ -157,6 +178,7 @@ public:
             if (signal)
             {
                 signal->disconnect(slot);
+                signal->unregisterConnection(this);
                 signal = nullptr;
             }
         }
@@ -202,6 +224,24 @@ public:
 private:
     std::vector<std::shared_ptr<Slot>> slots;
     std::mutex emitMutex;
+    std::vector<Connection*> connections;
+
+    inline void registerConnection(Connection* connection)
+    {
+        if (std::find(connections.begin(), connections.end(), connection) == connections.end())
+        {
+            connections.push_back(connection);
+        }
+    }
+    
+    inline void unregisterConnection(Connection* connection)
+    {
+        auto it = std::find(connections.begin(), connections.end(), connection);
+        if (it != connections.end())
+        {
+            connections.erase(it);
+        }
+    }
     
     inline bool disconnect(std::weak_ptr<Slot> slot) noexcept
     {
@@ -313,7 +353,13 @@ public:
     Signal& operator=(const Signal<void>&) = delete;
     Signal(Signal<void>&& other) = delete;
     Signal& operator=(Signal<void>&& other) = delete;
-    ~Signal() = default;
+    ~Signal()
+    {
+        for (auto& c : connections)
+        {
+            c->close();
+        }
+    }
     
     class Connection : public SignalConnection
     {
@@ -321,18 +367,33 @@ public:
         Connection(Signal* initSignal, std::weak_ptr<Slot> initSlot)
             : signal(initSignal)
             , slot(initSlot)
-        {}
+        {
+            if (signal)
+            {
+                signal->registerConnection(this);
+            }
+        }
         Connection(const Connection&) = delete;
         Connection& operator=(const Connection&) = delete;
         Connection(Connection&& other)
             : signal(other.signal)
             , slot(std::move(other.slot))
         {
+            if (signal)
+            {
+                signal->unregisterConnection(&other);
+                signal->registerConnection(this);
+            }
             other.signal = nullptr;
         }
         Connection& operator=(Connection&& other)
         {
             signal = other.signal;
+            if (signal)
+            {
+                signal->unregisterConnection(&other);
+                signal->registerConnection(this);
+            }
             slot = std::move(other.slot);
             other.signal = nullptr;
             return *this;
@@ -348,6 +409,7 @@ public:
             if (signal)
             {
                 signal->disconnect(slot);
+                signal->unregisterConnection(this);
                 signal = nullptr;
             }
         }
@@ -395,7 +457,25 @@ public:
 private:
     std::vector<std::shared_ptr<Slot>> slots;
     std::mutex emitMutex;
+    std::vector<Connection*> connections;
 
+    inline void registerConnection(Connection* connection)
+    {
+        if (std::find(connections.begin(), connections.end(), connection) == connections.end())
+        {
+            connections.push_back(connection);
+        }
+    }
+    
+    inline void unregisterConnection(Connection* connection)
+    {
+        auto it = std::find(connections.begin(), connections.end(), connection);
+        if (it != connections.end())
+        {
+            connections.erase(it);
+        }
+    }
+    
     inline bool disconnect(std::weak_ptr<Slot> slot) noexcept
     {
         std::lock_guard<std::mutex> lock(emitMutex);
