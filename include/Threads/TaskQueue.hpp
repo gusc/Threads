@@ -244,29 +244,36 @@ protected:
     public:
         virtual ~Task() = default;
         inline void execute() {
-            bool shouldExecute = false;
+            auto expected = ExecutionState::Queued;
+            while (!state.compare_exchange_weak(expected, ExecutionState::Started))
             {
-                const std::lock_guard<decltype(mutex)> lock(mutex);
-                shouldExecute = !isCancelled;
-            }
-            if (shouldExecute)
-            {
-                // Call this outside the lock to prevent deadlocking
-                privateExecute();
+                if (expected != ExecutionState::Queued)
                 {
-                    const std::lock_guard<decltype(mutex)> lock(mutex);
-                    isExecuted = true;
+                    // This task has either been canceled or executed already
+                    return;
                 }
             }
+            
+            // Call this outside the lock to prevent deadlocking
+            privateExecute();
+            
+            expected = ExecutionState::Started;
+            while (!state.compare_exchange_weak(expected, ExecutionState::Executed))
+            {}
         }
         inline void cancel() noexcept
         {
-            const std::lock_guard<decltype(mutex)> lock(mutex);
-            if (!isCancelled && !isExecuted)
+            auto expected = ExecutionState::Queued;
+            while (!state.compare_exchange_weak(expected, ExecutionState::Canceled))
             {
-                isCancelled = true;
-                privateCancel();
+                if (expected != ExecutionState::Queued)
+                {
+                    // This task has either been canceled or executed already
+                    return;
+                }
             }
+            
+            privateCancel();
         }
     protected:
         
@@ -274,9 +281,15 @@ protected:
         virtual void privateCancel() = 0;
         
     private:
-        std::recursive_mutex mutex;
-        bool isCancelled { false };
-        bool isExecuted { false };
+        enum class ExecutionState : int
+        {
+            Queued,
+            Started,
+            Executed,
+            Canceled
+        };
+        
+        std::atomic<ExecutionState> state { ExecutionState::Queued };
     };
     
     /// @brief templated task to wrap a callable object
