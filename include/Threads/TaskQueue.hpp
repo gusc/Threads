@@ -99,6 +99,7 @@ public:
     ~TaskQueue()
     {
         setAcceptsTasks(false);
+        releaseSubQueues();
         notifyQueueChange();
     }
 
@@ -470,38 +471,74 @@ protected:
     
     inline void notifyQueueChange()
     {
+        const std::lock_guard<decltype(mutex)> lock(mutex);
         if (queueNotifyCallback)
         {
             queueNotifyCallback();
         }
     }
     
-    inline LockedReference<std::queue<std::shared_ptr<Task>>, std::recursive_mutex> acquireTaskQueue()
+    inline void unregisterQueueChangeCallback()
     {
+        const std::lock_guard<decltype(mutex)> lock(mutex);
+        queueNotifyCallback = nullptr;
+    }
+    
+    inline std::shared_ptr<Task> acquireNextTask()
+    {
+        const std::lock_guard<decltype(mutex)> lock(mutex);
+        // First process main queue
+        if (!taskQueue.empty())
         {
-            // Move all the subqueue tasks to this task queue
-            const std::lock_guard<decltype(mutex)> lock(mutex);
-            auto it = subQueues.begin();
-            while (it != subQueues.end())
+            auto next = std::move(taskQueue.front());
+            taskQueue.pop();
+            return next;
+        }
+        // Then take sub-queues in creation order
+        for (auto& q : subQueues)
+        {
+            if (auto queue = q.lock())
             {
-                if (auto queue = it->lock())
+                auto next = queue->acquireNextTask();
+                if (next)
                 {
-                    auto tasks = queue->acquireTaskQueue();
-                    while (tasks->size())
-                    {
-                        taskQueue.emplace(std::move(tasks->front()));
-                        tasks->pop();
-                    }
-                    ++it;
-                }
-                else
-                {
-                    // Remove sub-queue that might be destroyed by it's owner
-                    it = subQueues.erase(it);
+                    return next;
                 }
             }
         }
-        return { taskQueue, mutex };
+        return nullptr;
+    }
+    
+    inline void clearDeadSubQueues()
+    {
+        const std::lock_guard<decltype(mutex)> lock(mutex);
+        auto it = subQueues.begin();
+        while (it != subQueues.end())
+        {
+            if (auto queue = it->lock())
+            {
+                queue->clearDeadSubQueues();
+                ++it;
+            }
+            else
+            {
+                // Remove sub-queue that might be destroyed by it's owner
+                it = subQueues.erase(it);
+            }
+        }
+    }
+    
+    inline void releaseSubQueues()
+    {
+        const std::lock_guard<decltype(mutex)> lock(mutex);
+        // If a parent queue is being destroyed we want to make sure nobody tries to call it back after destruction
+        for (auto& q : subQueues)
+        {
+            if (auto queue = q.lock())
+            {
+                queue->unregisterQueueChangeCallback();
+            }
+        }
     }
     
 private:
@@ -562,24 +599,15 @@ private:
         while (!stopToken.getIsStopping())
         {
             std::unique_lock<decltype(waitMutex)> lock(waitMutex);
-            std::shared_ptr<Task> next;
             // Move delayed tasks to main queue
             const auto timeNow = std::chrono::steady_clock::now();
             auto nextTaskTime = enqueueDelayedTasks(timeNow);
-            // Get the next task from the main queue
-            {
-                auto taskQueue = acquireTaskQueue();
-                if (!taskQueue->empty())
-                {
-                    next = std::move(taskQueue->front());
-                    taskQueue->pop();
-                }
-            }
-            if (next)
+            auto nextTask = acquireNextTask();
+            if (nextTask)
             {
                 try
                 {
-                    next->execute();
+                    nextTask->execute();
                 }
                 catch (...)
                 {
@@ -596,6 +624,7 @@ private:
                 // We wait for a new task to be pushed on any of the queues
                 queueWait.wait(lock);
             }
+            clearDeadSubQueues();
         }
         setAcceptsTasks(false);
         runLeftovers();
@@ -603,12 +632,11 @@ private:
     
     inline void runLeftovers()
     {
+        /// @note Delayed tasks are implicitly canceled by this point as their deadlines hadn't arrived
         // Process any leftover tasks
-        auto taskQueue = acquireTaskQueue();
-        while (taskQueue->size())
+        while (auto next = acquireNextTask())
         {
-            taskQueue->front()->execute();
-            taskQueue->pop();
+            next->execute();
         }
     }
 };
