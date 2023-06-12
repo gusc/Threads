@@ -99,6 +99,7 @@ public:
     ~TaskQueue()
     {
         setAcceptsTasks(false);
+        releaseSubQueues();
         notifyQueueChange();
     }
 
@@ -109,7 +110,7 @@ public:
     {
         if (getAcceptsTasks())
         {
-            const std::lock_guard<decltype(mutex)> lock(mutex);
+            const std::lock_guard lock(taskQueueMutex);
             taskQueue.emplace(std::make_shared<TaskWithCallable<TCallable>>(newTask));
             notifyQueueChange();
         }
@@ -128,7 +129,7 @@ public:
     {
         if (getAcceptsTasks())
         {
-            const std::lock_guard<decltype(mutex)> lock(mutex);
+            const std::lock_guard lock(taskQueueMutex);
             auto time = std::chrono::steady_clock::now() + timeout;
             auto task = std::make_shared<TaskWithCallable<TCallable>>(newTask);
             TaskHandle handle { task };
@@ -161,7 +162,7 @@ public:
             }
             else
             {
-                const std::lock_guard<decltype(mutex)> lock(mutex);
+                const std::lock_guard lock(taskQueueMutex);
                 taskQueue.emplace(task);
                 notifyQueueChange();
             }
@@ -222,7 +223,7 @@ public:
     /// @brief Cancel all the tasks
     inline void cancelAll() noexcept
     {
-        const std::lock_guard<decltype(mutex)> lock(mutex);
+        const std::lock_guard lock(taskQueueMutex);
         delayedQueue.clear();
         while (taskQueue.size())
         {
@@ -405,7 +406,7 @@ protected:
     
     inline std::chrono::time_point<std::chrono::steady_clock> enqueueDelayedTasks(std::chrono::time_point<std::chrono::steady_clock> timeNow)
     {
-        const std::lock_guard<decltype(mutex)> lock(mutex);
+        const std::lock_guard lock(taskQueueMutex);
         for (auto it = delayedQueue.begin(); it != delayedQueue.end();)
         {
             if ((*it)->getTime() < timeNow)
@@ -444,7 +445,7 @@ protected:
     
     inline void setThreadId(std::thread::id newThreadId)
     {
-        const std::lock_guard<decltype(mutex)> lock(mutex);
+        const std::lock_guard lock(taskQueueMutex);
         threadId = newThreadId;
         for (auto& q : subQueues)
         {
@@ -457,7 +458,7 @@ protected:
     
     inline void setAcceptsTasks(bool newAcceptsTasks)
     {
-        const std::lock_guard<decltype(mutex)> lock(mutex);
+        const std::lock_guard lock(taskQueueMutex);
         acceptsTasks = newAcceptsTasks;
         for (auto& q : subQueues)
         {
@@ -470,48 +471,85 @@ protected:
     
     inline void notifyQueueChange()
     {
+        const std::lock_guard lock(queueNotifyMutex);
         if (queueNotifyCallback)
         {
             queueNotifyCallback();
         }
     }
     
-    inline LockedReference<std::queue<std::shared_ptr<Task>>, std::recursive_mutex> acquireTaskQueue()
+    inline void unregisterQueueChangeCallback()
     {
+        const std::lock_guard lock(queueNotifyMutex);
+        queueNotifyCallback = nullptr;
+    }
+    
+    inline std::shared_ptr<Task> acquireNextTask()
+    {
+        const std::lock_guard lock(taskQueueMutex);
+        // First process main queue
+        if (!taskQueue.empty())
         {
-            // Move all the subqueue tasks to this task queue
-            const std::lock_guard<decltype(mutex)> lock(mutex);
-            auto it = subQueues.begin();
-            while (it != subQueues.end())
+            auto next = std::move(taskQueue.front());
+            taskQueue.pop();
+            return next;
+        }
+        // Then take sub-queues in creation order
+        for (auto& q : subQueues)
+        {
+            if (auto queue = q.lock())
             {
-                if (auto queue = it->lock())
+                auto next = queue->acquireNextTask();
+                if (next)
                 {
-                    auto tasks = queue->acquireTaskQueue();
-                    while (tasks->size())
-                    {
-                        taskQueue.emplace(std::move(tasks->front()));
-                        tasks->pop();
-                    }
-                    ++it;
-                }
-                else
-                {
-                    // Remove sub-queue that might be destroyed by it's owner
-                    it = subQueues.erase(it);
+                    return next;
                 }
             }
         }
-        return { taskQueue, mutex };
+        return nullptr;
+    }
+    
+    inline void clearDeadSubQueues()
+    {
+        const std::lock_guard lock(taskQueueMutex);
+        auto it = subQueues.begin();
+        while (it != subQueues.end())
+        {
+            if (auto queue = it->lock())
+            {
+                queue->clearDeadSubQueues();
+                ++it;
+            }
+            else
+            {
+                // Remove sub-queue that might be destroyed by it's owner
+                it = subQueues.erase(it);
+            }
+        }
+    }
+    
+    inline void releaseSubQueues()
+    {
+        const std::lock_guard lock(taskQueueMutex);
+        // If a parent queue is being destroyed we want to make sure nobody tries to call it back after destruction
+        for (auto& q : subQueues)
+        {
+            if (auto queue = q.lock())
+            {
+                queue->unregisterQueueChangeCallback();
+            }
+        }
     }
     
 private:
-    std::recursive_mutex mutex;
     std::thread::id threadId { std::this_thread::get_id() };
     std::atomic_bool acceptsTasks { true };
     std::queue<std::shared_ptr<Task>> taskQueue;
     std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
     std::vector<std::weak_ptr<TaskQueue>> subQueues;
     std::function<void(void)> queueNotifyCallback { nullptr };
+    std::recursive_mutex taskQueueMutex;
+    std::recursive_mutex queueNotifyMutex;
 };
 
 /// @brief a class representing a task queue that's running serially on a single thread
@@ -562,24 +600,15 @@ private:
         while (!stopToken.getIsStopping())
         {
             std::unique_lock<decltype(waitMutex)> lock(waitMutex);
-            std::shared_ptr<Task> next;
             // Move delayed tasks to main queue
             const auto timeNow = std::chrono::steady_clock::now();
             auto nextTaskTime = enqueueDelayedTasks(timeNow);
-            // Get the next task from the main queue
-            {
-                auto taskQueue = acquireTaskQueue();
-                if (!taskQueue->empty())
-                {
-                    next = std::move(taskQueue->front());
-                    taskQueue->pop();
-                }
-            }
-            if (next)
+            auto nextTask = acquireNextTask();
+            if (nextTask)
             {
                 try
                 {
-                    next->execute();
+                    nextTask->execute();
                 }
                 catch (...)
                 {
@@ -596,6 +625,7 @@ private:
                 // We wait for a new task to be pushed on any of the queues
                 queueWait.wait(lock);
             }
+            clearDeadSubQueues();
         }
         setAcceptsTasks(false);
         runLeftovers();
@@ -603,12 +633,11 @@ private:
     
     inline void runLeftovers()
     {
+        /// @note Delayed tasks are implicitly canceled by this point as their deadlines hadn't arrived
         // Process any leftover tasks
-        auto taskQueue = acquireTaskQueue();
-        while (taskQueue->size())
+        while (auto next = acquireNextTask())
         {
-            taskQueue->front()->execute();
-            taskQueue->pop();
+            next->execute();
         }
     }
 };
