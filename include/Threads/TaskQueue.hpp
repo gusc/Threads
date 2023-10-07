@@ -6,11 +6,10 @@
 //  Copyright © 2022 Gusts Kaksis. All rights reserved.
 //
 
-#ifndef SerialTaskQueue_hpp
-#define SerialTaskQueue_hpp
+#ifndef GUSC_TASKQUEUE_HPP
+#define GUSC_TASKQUEUE_HPP
 
 #include "Thread.hpp"
-#include "Utilities.hpp"
 #include <set>
 #include <mutex>
 #include <utility>
@@ -645,4 +644,4 @@ private:
 }
 } // namespace gusc::Threads
 
-#endif /* SerialTaskQueue_hpp */
+#endif /* GUSC_TASKQUEUE_HPP */

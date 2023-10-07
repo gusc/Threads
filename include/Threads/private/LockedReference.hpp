@@ -1,13 +1,13 @@
 //
-//  Utilities.hpp
+//  LockedReference.hpp
 //  Threads
 //
 //  Created by Gusts Kaksis on 15/11/2022.
 //  Copyright © 2022 Gusts Kaksis. All rights reserved.
 //
 
-#ifndef Utilities_hpp
-#define Utilities_hpp
+#ifndef GUSC_LOCKEDREFERENCE_HPP
+#define GUSC_LOCKEDREFERENCE_HPP
 
 #include <mutex>
 
@@ -54,4 +54,4 @@ private:
     
 } // namespace gusc
 
-#endif /* Utilities_hpp */
+#endif /* GUSC_LOCKEDREFERENCE_HPP */

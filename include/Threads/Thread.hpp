@@ -6,8 +6,8 @@
 //  Copyright © 2020 Gusts Kaksis. All rights reserved.
 //
 
-#ifndef Thread_hpp
-#define Thread_hpp
+#ifndef GUSC_THREAD_HPP
+#define GUSC_THREAD_HPP
 
 #include <thread>
 #include <atomic>
@@ -344,4 +344,4 @@ public:
 }
 } // namespace gusc::Threads
 
-#endif /* Thread_hpp */
+#endif /* GUSC_THREAD_HPP */

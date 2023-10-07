@@ -8,7 +8,7 @@ set(SOURCES
     "include/Threads/TaskQueue.hpp"
 	"include/Threads/Thread.hpp"
     "include/Threads/ThreadPool.hpp"
-    "include/Threads/Utilities.hpp"
+    "include/Threads/private/LockedReference.hpp"
 )
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.19.0")

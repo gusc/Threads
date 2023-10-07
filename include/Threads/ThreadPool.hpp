@@ -6,8 +6,8 @@
 //  Copyright © 2022 Gusts Kaksis. All rights reserved.
 //
 
-#ifndef ThreadPool_hpp
-#define ThreadPool_hpp
+#ifndef GUSC_THREADPOOL_HPP
+#define GUSC_THREADPOOL_HPP
 
 #include "Thread.hpp"
 #include <vector>
@@ -64,4 +64,4 @@ private:
 
 } // namespace gusc::Threads
 
-#endif /* ThreadPool_hpp */
+#endif /* GUSC_THREADPOOL_HPP */

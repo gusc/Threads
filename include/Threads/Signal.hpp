@@ -6,8 +6,8 @@
 //  Copyright © 2020 Gusts Kaksis. All rights reserved.
 //
 
-#ifndef Signal_hpp
-#define Signal_hpp
+#ifndef GUSC_SIGNAL_HPP
+#define GUSC_SIGNAL_HPP
 
 #include "TaskQueue.hpp"
 
@@ -495,4 +495,4 @@ private:
 }
 } // namespace gusc::Threads
     
-#endif /* Signal_hpp */
+#endif /* GUSC_SIGNAL_HPP */
