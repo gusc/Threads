@@ -8,6 +8,7 @@ set(SOURCES
     "include/Threads/TaskQueue.hpp"
 	"include/Threads/Thread.hpp"
     "include/Threads/ThreadPool.hpp"
+    "include/Threads/private/function_traits.hpp"
     "include/Threads/private/LockedReference.hpp"
 )
 

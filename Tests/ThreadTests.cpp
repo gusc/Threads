@@ -74,8 +74,8 @@ void runThreadTests()
         MethodWrapper o;
         o.callableMethod(token);
         // Can't use std::bind because MSVC is stupid
-        gusc::Threads::Thread t([&](const gusc::Threads::Thread::StopToken& token) {
-            o.callableMethod(token);
+        gusc::Threads::Thread t([&](const gusc::Threads::Thread::StopToken& tok) {
+            o.callableMethod(tok);
         });
         t.start();
     }

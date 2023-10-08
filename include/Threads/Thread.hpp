@@ -12,6 +12,8 @@
 #include <thread>
 #include <atomic>
 #include <future>
+#include <type_traits>
+#include "private/function_traits.hpp"
 
 #if !defined(_WIN32)
 #   include <pthread.h>
@@ -19,6 +21,23 @@
 
 namespace gusc
 {
+
+template <class TA, class TB>
+using IsSameType = std::is_same<
+    typename std::decay<
+        typename std::remove_cv<
+            typename std::remove_reference<TA>::type
+        >::type
+    >::type,
+    TB
+>;
+
+template<class TFn, std::size_t argN, class TArg>
+using IsSameFunctionArgType = IsSameType<
+    typename function_traits<TFn>::template argument<argN>::type,
+    TArg
+>;
+
 namespace Threads
 {
 
@@ -26,6 +45,8 @@ namespace Threads
 class Thread
 {
 public:
+    /// @brief an object returned from Thread::start() method that informs when thread has fully initialized
+    /// Use this token to pause caller thread until this thread has fully started
     class StartToken
     {
         friend Thread;
@@ -57,6 +78,9 @@ public:
         std::future<void> future;
     };
     
+    /// @brief an object passed to thread procedure to notify it about thread being stopped
+    /// Use this token in your thread run-loop to detecect when thread is being stopped and
+    /// do a graceful exit
     class StopToken
     {
         friend Thread;
@@ -82,26 +106,25 @@ public:
             isStopping = true;
         }
     };
-    
+
     Thread() = default;
-    Thread(const std::function<void(void)>& initThreadProcedure)
-        : threadProcedure([initThreadProcedure](const StopToken&){
-            initThreadProcedure();
-        })
+    // Thread("name", function, args...)
+    template <class TFn, class ...TArgs>
+    Thread(const std::string& initThreadName, TFn&& fn, TArgs&&... args)
+        : threadName(initThreadName)
+        , threadProcedure(std::forward<TFn>(fn), std::forward<TArgs>(args)...)
     {}
-    Thread(const std::string& initThreadName,const std::function<void(void)>& initThreadProcedure)
-        : threadProcedure([initThreadProcedure](const StopToken&){
-            initThreadProcedure();
-        })
-        , threadName(initThreadName)
+    // Thread(function, args...)
+    template <class TFn, class ...TArgs,
+        class = typename std::enable_if<
+            !IsSameType<TFn, std::string>::value &&
+            !IsSameType<TFn, char*>::value
+        >::type
+    >
+    explicit Thread(TFn&& fn, TArgs&&... args)
+        : Thread("gust::Threads::Thread", std::forward<TFn>(fn), std::forward<TArgs>(args)...)
     {}
-    Thread(const std::function<void(const StopToken&)>& initThreadProcedure)
-        : threadProcedure(initThreadProcedure)
-    {}
-    Thread(const std::string& initThreadName, const std::function<void(const StopToken&)>& initThreadProcedure)
-        : threadProcedure(initThreadProcedure)
-        , threadName(initThreadName)
-    {}
+
     Thread(const Thread&) = delete;
     Thread& operator=(const Thread&) = delete;
     Thread(Thread&&) = delete;
@@ -116,6 +139,7 @@ public:
     }
     
     /// @brief start the thread
+    /// @returns start token you can use to wait for the thread routine to actually start
     virtual inline StartToken& start()
     {
         if (!getIsStarted())
@@ -205,16 +229,13 @@ protected:
 #endif
         startToken.isStarted = true;
         startPromise.set_value();
-        if (threadProcedure)
+        try
         {
-            try
-            {
-                threadProcedure(stopToken);
-            }
-            catch (...)
-            {
-                // Prevent the thread from crashing
-            }
+            threadProcedure(stopToken);
+        }
+        catch (...)
+        {
+            // Prevent the thread from crashing
         }
         // The thread procedure has finished so the thread will stop now
         setIsStarted(false);
@@ -237,11 +258,12 @@ protected:
         stopToken = StopToken{};
     }
     
-    inline void changeThreadProcedure(const std::function<void(const StopToken&)>& newThreadProcedure)
+    template <class TFn, class ...TArgs>
+    inline void changeThreadProcedure(TFn&& fn, TArgs&&... args)
     {
         if (!getIsStarted())
         {
-            threadProcedure = newThreadProcedure;
+            threadProcedure = ThreadProcedure{ std::forward<TFn>(fn), std::forward<TArgs>(args)... };
         }
         else
         {
@@ -289,30 +311,61 @@ protected:
     }
     
 private:
+    class ThreadProcedure
+    {
+    public:
+        ThreadProcedure() = default;
+        template <class TFn, class ...TArgs,
+            std::enable_if_t<
+                IsSameFunctionArgType<TFn, 0, StopToken>::value
+            , int> = 0
+        >
+        explicit ThreadProcedure(TFn&& fn, TArgs&&... args)
+            : threadProcedure(std::bind(std::forward<TFn>(fn), std::placeholders::_1, std::forward<TArgs>(args)...))
+        {}
+        
+        template <class TFn, class ...TArgs,
+            std::enable_if_t<
+                !IsSameFunctionArgType<TFn, 0, StopToken>::value
+            , int> = 0
+        >
+        explicit ThreadProcedure(TFn&& fn, TArgs&&... args)
+            : threadProcedure(std::bind(std::forward<TFn>(fn), std::forward<TArgs>(args)...))
+        {
+        }
+        
+        inline void operator()(const StopToken& stopToken) const
+        {
+            if (threadProcedure)
+            {
+                threadProcedure(stopToken);
+            }
+        }
+        
+    private:
+        std::function<void(const StopToken&)> threadProcedure;
+    };
+    
     std::atomic_bool isStarted { false };
     std::promise<void> startPromise;
     StartToken startToken;
     StopToken stopToken;
-    std::function<void(const StopToken&)> threadProcedure;
-    std::string threadName { "gust::Threads::Thread " };
+    std::string threadName { "gust::Threads::Thread" };
+    ThreadProcedure threadProcedure;
     std::thread thread;
+    
+    
 };
 
 /// @brief Class representing a currently executing thread
 class ThisThread : public Thread
 {
 public:
-    /// @brief set a thread procedure to use on this thread with StopToken
-    inline void setThreadProcedure(const std::function<void(const StopToken&)>& newProc)
+    /// @brief set a thread procedure to use on this thread with or without StopToken
+    template <class TFn, class ...TArgs>
+    inline void setThreadProcedure(TFn&& fn, TArgs&&... args)
     {
-        changeThreadProcedure(newProc);
-    }
-    /// @brief set a thread procedure to use on this thread
-    inline void setThreadProcedure(const std::function<void(void)>& newProc)
-    {
-        changeThreadProcedure([newProc](const StopToken&){
-            newProc();
-        });
+        changeThreadProcedure(std::forward<TFn>(fn), std::forward<TArgs>(args)...);
     }
     /// @brief start the thread and it's run-loop
     /// @warning calling this method will efectivelly block current thread
