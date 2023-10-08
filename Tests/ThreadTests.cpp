@@ -22,38 +22,154 @@ using namespace std::chrono_literals;
 namespace
 {
 static Logger tlog;
+
+std::shared_ptr<std::vector<int>> anon_copyable = std::make_shared<std::vector<int>>(50, 0);
+std::unique_ptr<std::vector<int>> anon_movable = std::make_unique<std::vector<int>>(100, 0);
+
+void f1(const gusc::Threads::Thread::StopToken&)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 }
 
-static void callableFunction(const gusc::Threads::Thread::StopToken&)
+void f2()
 {
-    tlog << "Callable function thread ID: " + tidToStr(std::this_thread::get_id());
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 }
 
-class MethodWrapper
+auto l1 = [](const gusc::Threads::Thread::StopToken&)
 {
-public:
-    void callableMethod(const gusc::Threads::Thread::StopToken&)
-    {
-        tlog << "Callable method thread ID: " + tidToStr(std::this_thread::get_id());
-    }
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 };
 
-struct CallableStruct
+const auto l2 = [](const gusc::Threads::Thread::StopToken&)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+};
+
+const auto l3 = [c=anon_copyable](const gusc::Threads::Thread::StopToken&)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(c->size());
+};
+
+const auto l4 = [m=std::move(anon_movable)](const gusc::Threads::Thread::StopToken&)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
+auto l5 = []()
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+};
+
+const auto l6 = []()
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+};
+
+}
+
+static std::shared_ptr<std::vector<int>> stat_copyable = std::make_shared<std::vector<int>>(50, 0);
+static std::unique_ptr<std::vector<int>> stat_movable = std::make_unique<std::vector<int>>(100, 0);
+
+static void f3(const gusc::Threads::Thread::StopToken&)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+}
+
+static void f4()
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+}
+
+static auto l7 = [](const gusc::Threads::Thread::StopToken&)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+};
+
+static const auto l8 = [](const gusc::Threads::Thread::StopToken&)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+};
+
+static const auto l9 = [c=stat_copyable](const gusc::Threads::Thread::StopToken&)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(c->size());
+};
+
+static const auto l10 = [m=std::move(stat_movable)](const gusc::Threads::Thread::StopToken&)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
+static auto l11 = []()
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+};
+
+static const auto l12 = []()
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+};
+
+struct s1
 {
     void operator()(const gusc::Threads::Thread::StopToken&) const
     {
-        tlog << "Callable struct thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
     }
 };
 
-static const auto globalConstLambda = [](const gusc::Threads::Thread::StopToken&){
-    tlog << "Global const lambda thread ID: " + tidToStr(std::this_thread::get_id());
+struct s2
+{
+    void operator()() const
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    }
 };
 
-static auto globalLambda = [](const gusc::Threads::Thread::StopToken&){
-    tlog << "Global lambda thread ID: " + tidToStr(std::this_thread::get_id());
+struct s3
+{
+    void operator()() const
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(data->size());
+    }
+    
+    std::unique_ptr<std::vector<int>> data = std::make_unique<std::vector<int>>(10, 0);
 };
 
+class c1
+{
+public:
+    void f1(const gusc::Threads::Thread::StopToken&)
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    }
+    
+    void f2(const gusc::Threads::Thread::StopToken&) const
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    }
+    
+    static void f3(const gusc::Threads::Thread::StopToken&)
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    }
+    
+    void f4()
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    }
+    
+    void f5() const
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    }
+    
+    static void f6()
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    }
+};
 
 void runThreadTests()
 {
@@ -62,76 +178,219 @@ void runThreadTests()
 
     gusc::Threads::Thread::StopToken token;
     
-    // Test simple function
+    // Test simple functions
     {
-        callableFunction(token);
-        gusc::Threads::Thread t(callableFunction);
+        f1(token);
+        gusc::Threads::Thread t(&f1);
+        t.start();
+    }
+    {
+        f2();
+        gusc::Threads::Thread t(&f2);
+        t.start();
+    }
+    {
+        f3(token);
+        gusc::Threads::Thread t(&f3);
+        t.start();
+    }
+    {
+        f4();
+        gusc::Threads::Thread t(&f4);
+        t.start();
+    }
+    
+    // Test lambdas
+    {
+        l1(token);
+        gusc::Threads::Thread t(l1);
+        t.start();
+    }
+    {
+        l2(token);
+        gusc::Threads::Thread t(l2);
+        t.start();
+    }
+    {
+        l3(token);
+        gusc::Threads::Thread t(l3);
+        t.start();
+    }
+    {
+        l4(token);
+        gusc::Threads::Thread t(l4);
+        t.start();
+    }
+    {
+        l5();
+        gusc::Threads::Thread t(l5);
+        t.start();
+    }
+    {
+        l6();
+        gusc::Threads::Thread t(l6);
+        t.start();
+    }
+    {
+        l7(token);
+        gusc::Threads::Thread t(l7);
+        t.start();
+    }
+    {
+        l8(token);
+        gusc::Threads::Thread t(l8);
+        t.start();
+    }
+    {
+        l9(token);
+        gusc::Threads::Thread t(l9);
+        t.start();
+    }
+    {
+        l10(token);
+        gusc::Threads::Thread t(l10);
+        t.start();
+    }
+    {
+        l11();
+        gusc::Threads::Thread t(l11);
+        t.start();
+    }
+    {
+        l12();
+        gusc::Threads::Thread t(l12);
+        t.start();
+    }
+    {
+        tlog << "Local lambda";
+        auto local = [](const gusc::Threads::Thread::StopToken&) {
+            tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+        };
+        local(token);
+        gusc::Threads::Thread t(local);
+        t.start();
+    }
+    {
+        // Anonymous copyable
+        tlog << "Annonymous copyable lambda";
+        gusc::Threads::Thread t([](const gusc::Threads::Thread::StopToken&) {
+            tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+        });
+        t.start();
+    }
+    {
+        // Anonymous movable
+        tlog << "Annonymous movable lambda";
+        std::unique_ptr<std::vector<int>> local_movable = std::make_unique<std::vector<int>>(100, 0);
+        gusc::Threads::Thread t([m=std::move(local_movable)](const gusc::Threads::Thread::StopToken&) {
+            tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+        });
+        t.start();
+    }
+    
+    // Test callable structs
+    {
+        s1 cb;
+        cb(token);
+        gusc::Threads::Thread t(cb);
+        t.start();
+    }
+    {
+        const s1 cb;
+        cb(token);
+        gusc::Threads::Thread t(cb);
+        t.start();
+    }
+    {
+        // Temporary struct
+        tlog << "Temporary s1";
+        gusc::Threads::Thread t(s1{});
+        t.start();
+    }
+    {
+        s2 cb;
+        cb();
+        gusc::Threads::Thread t(cb);
+        t.start();
+    }
+    {
+        const s2 cb;
+        cb();
+        gusc::Threads::Thread t(cb);
+        t.start();
+    }
+    {
+        // Temporary struct
+        tlog << "Temporary s2";
+        gusc::Threads::Thread t(s2{});
         t.start();
     }
     
     // Test object method
     {
-        MethodWrapper o;
-        o.callableMethod(token);
-        // Can't use std::bind because MSVC is stupid
-        gusc::Threads::Thread t([&](const gusc::Threads::Thread::StopToken& tok) {
-            o.callableMethod(tok);
+        c1 o;
+        o.f1(token);
+        gusc::Threads::Thread t(std::bind(&c1::f1, &o, std::placeholders::_1));
+        t.start();
+    }
+    {
+        c1 o;
+        o.f1(token);
+        gusc::Threads::Thread t([&](const gusc::Threads::Thread::StopToken& tk) {
+            o.f1(tk);
         });
         t.start();
     }
-    
-    // Test callable struct
     {
-        const CallableStruct cb;
-        cb(token);
-        gusc::Threads::Thread t(cb);
+        c1 o;
+        o.f2(token);
+        gusc::Threads::Thread t(std::bind(&c1::f2, &o, std::placeholders::_1));
         t.start();
     }
-
-    // Test callable struct temporary
     {
-        gusc::Threads::Thread t(CallableStruct{});
-        t.start();
-    }
-    
-    // Test local lambda
-    {
-        auto localLambda = [](const gusc::Threads::Thread::StopToken&){
-            tlog << "Local lambda thread ID: " + tidToStr(std::this_thread::get_id());
-        };
-        localLambda(token);
-        gusc::Threads::Thread t(localLambda);
-        t.start();
-    }
-    
-    // Test global lambda
-    {
-        globalLambda(token);
-        gusc::Threads::Thread t(globalLambda);
-        t.start();
-    }
-    
-    // Test global const lambda
-    {
-        globalConstLambda(token);
-        gusc::Threads::Thread t(globalConstLambda);
-        t.start();
-    }
-    
-    // Test anonymous lambda
-    {
-        gusc::Threads::Thread t([](const gusc::Threads::Thread::StopToken&){
-            tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        c1 o;
+        o.f2(token);
+        gusc::Threads::Thread t([&](const gusc::Threads::Thread::StopToken& tk) {
+            o.f2(tk);
         });
         t.start();
     }
-    
-    // Test non-copyable captures
     {
-        std::unique_ptr<std::vector<int>> data = std::make_unique<std::vector<int>>(50, 0);
-        gusc::Threads::Thread t([d=std::move(data)](const gusc::Threads::Thread::StopToken&){
-            tlog << "Non-copy capture lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", data: " + std::to_string(d->size());
+        c1::f3(token);
+        gusc::Threads::Thread t(&c1::f3);
+        t.start();
+    }
+    {
+        c1 o;
+        o.f4();
+        gusc::Threads::Thread t(std::bind(&c1::f4, &o));
+        t.start();
+    }
+    {
+        c1 o;
+        o.f4();
+        gusc::Threads::Thread t([&](const gusc::Threads::Thread::StopToken&) {
+            o.f4();
         });
+        t.start();
+    }
+    {
+        c1 o;
+        o.f5();
+        gusc::Threads::Thread t(std::bind(&c1::f5, &o));
+        t.start();
+    }
+    {
+        c1 o;
+        o.f5();
+        gusc::Threads::Thread t([&](const gusc::Threads::Thread::StopToken&) {
+            o.f5();
+        });
+        t.start();
+    }
+    {
+        c1::f6();
+        gusc::Threads::Thread t(&c1::f6);
         t.start();
     }
     
