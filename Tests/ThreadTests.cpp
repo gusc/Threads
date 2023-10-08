@@ -126,6 +126,16 @@ void runThreadTests()
         t.start();
     }
     
+    // Test non-copyable captures
+    {
+        std::unique_ptr<std::vector<int>> data = std::make_unique<std::vector<int>>(50, 0);
+        gusc::Threads::Thread t([d=std::move(data)](const gusc::Threads::Thread::StopToken&){
+            tlog << "Non-copy capture lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", data: " + std::to_string(d->size());
+        });
+        t.start();
+    }
+    
+    
     // Test ThisThread
     {
         gusc::Threads::ThisThread tt;

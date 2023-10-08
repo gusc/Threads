@@ -311,39 +311,70 @@ protected:
     }
     
 private:
+    class CallableContainerBase
+    {
+    public:
+        virtual ~CallableContainerBase() = default;
+        virtual void call(const StopToken&) = 0;
+    };
+    
+    template<class TFn, class ...TArgs>
+    class CallableContainer : public CallableContainerBase
+    {
+    public:
+        explicit CallableContainer(TFn&& initFn, TArgs&&... initArgs)
+            : fn(std::forward<TFn>(initFn))
+            , args(std::make_tuple<TArgs&&...>(std::forward<TArgs>(initArgs)...))
+        {}
+        
+        void call(const StopToken& stopToken) override
+        {
+            callSpec<TFn>(stopToken, std::index_sequence_for<TArgs...>());
+        }
+        
+    private:
+        TFn fn;
+        std::tuple<TArgs...> args;
+        
+        template<typename T, std::size_t... Is>
+        inline
+        typename std::enable_if_t<
+            IsSameFunctionArgType<T, 0, StopToken>::value,
+            void> callSpec(const StopToken& stopToken, std::index_sequence<Is...>)
+        {
+            fn(stopToken, std::get<Is>(args)...);
+        }
+        
+        template<typename T, std::size_t... Is>
+        inline
+        typename std::enable_if_t<
+            !IsSameFunctionArgType<T, 0, StopToken>::value,
+            void> callSpec(const StopToken&, std::index_sequence<Is...>)
+        {
+            fn(std::get<Is>(args)...);
+        }
+    };
+    
     class ThreadProcedure
     {
     public:
         ThreadProcedure() = default;
-        template <class TFn, class ...TArgs,
-            std::enable_if_t<
-                IsSameFunctionArgType<TFn, 0, StopToken>::value
-            , int> = 0
-        >
-        explicit ThreadProcedure(TFn&& fn, TArgs&&... args)
-            : threadProcedure(std::bind(std::forward<TFn>(fn), std::placeholders::_1, std::forward<TArgs>(args)...))
-        {}
         
-        template <class TFn, class ...TArgs,
-            std::enable_if_t<
-                !IsSameFunctionArgType<TFn, 0, StopToken>::value
-            , int> = 0
-        >
+        template<class TFn, class ...TArgs>
         explicit ThreadProcedure(TFn&& fn, TArgs&&... args)
-            : threadProcedure(std::bind(std::forward<TFn>(fn), std::forward<TArgs>(args)...))
-        {
-        }
+            : threadProcedure(std::make_unique<CallableContainer<TFn, TArgs...>>(std::forward<TFn>(fn), std::forward<TArgs>(args)...))
+        {}
         
         inline void operator()(const StopToken& stopToken) const
         {
             if (threadProcedure)
             {
-                threadProcedure(stopToken);
+                threadProcedure->call(stopToken);
             }
         }
         
     private:
-        std::function<void(const StopToken&)> threadProcedure;
+        std::unique_ptr<CallableContainerBase> threadProcedure;
     };
     
     std::atomic_bool isStarted { false };
@@ -353,8 +384,6 @@ private:
     std::string threadName { "gust::Threads::Thread" };
     ThreadProcedure threadProcedure;
     std::thread thread;
-    
-    
 };
 
 /// @brief Class representing a currently executing thread
