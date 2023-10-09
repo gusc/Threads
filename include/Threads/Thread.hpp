@@ -335,7 +335,6 @@ private:
             std::is_invocable<T, StopToken, TArgs...>::value,
             void> callSpec(const StopToken& stopToken, std::index_sequence<Is...>)
         {
-            std::cout << "WITH StopToken\n";
             std::invoke(fn, stopToken, std::get<Is>(args)...);
         }
         
@@ -345,7 +344,6 @@ private:
             !std::is_invocable<T, StopToken, TArgs...>::value,
             void> callSpec(const StopToken&, std::index_sequence<Is...>)
         {
-            std::cout << "without StopToken\n";
             std::invoke(fn, std::get<Is>(args)...);
         }
     };
