@@ -26,6 +26,12 @@ struct function_traits<R(Args...)>
     using return_type = R;
 
     static constexpr std::size_t arity = sizeof...(Args);
+    
+    template <std::size_t N>
+    struct argExists
+    {
+        static constexpr bool value = N < arity;
+    };
 
     template <std::size_t N>
     struct argument
@@ -60,6 +66,12 @@ struct function_traits
         using return_type = typename call_type::return_type;
 
         static constexpr std::size_t arity = call_type::arity - 1;
+    
+        template <std::size_t N>
+        struct argExists
+        {
+            static constexpr bool value = N < call_type::arity - 1;
+        };
 
         template <std::size_t N>
         struct argument

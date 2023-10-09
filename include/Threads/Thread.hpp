@@ -22,7 +22,7 @@
 namespace gusc
 {
 
-template <class TA, class TB>
+template<class TA, class TB>
 using IsSameType = std::is_same<
     typename std::decay<
         typename std::remove_cv<
@@ -33,9 +33,12 @@ using IsSameType = std::is_same<
 >;
 
 template<class TFn, std::size_t argN, class TArg>
-using IsSameFunctionArgType = IsSameType<
-    typename function_traits<TFn>::template argument<argN>::type,
-    TArg
+using IsSameFunctionArgType = std::conjunction<
+    typename function_traits<TFn>::template argExists<argN>,
+    IsSameType<
+        typename function_traits<TFn>::template argument<argN>::type,
+        TArg
+    >
 >;
 
 namespace Threads
