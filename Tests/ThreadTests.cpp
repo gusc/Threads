@@ -26,44 +26,54 @@ static Logger tlog;
 std::shared_ptr<std::vector<int>> anon_copyable = std::make_shared<std::vector<int>>(50, 0);
 std::unique_ptr<std::vector<int>> anon_movable = std::make_unique<std::vector<int>>(100, 0);
 
-void f1(const gusc::Threads::Thread::StopToken&)
+void af1(const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 }
 
-void f2()
+void af2()
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 }
 
-auto l1 = [](const gusc::Threads::Thread::StopToken&)
+void af3(const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
+}
+
+auto al1 = [](const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 };
 
-const auto l2 = [](const gusc::Threads::Thread::StopToken&)
+const auto al2 = [](const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 };
 
-const auto l3 = [c=anon_copyable](const gusc::Threads::Thread::StopToken&)
+const auto al3 = [c=anon_copyable](const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(c->size());
 };
 
-const auto l4 = [m=std::move(anon_movable)](const gusc::Threads::Thread::StopToken&)
+const auto al4 = [m=std::move(anon_movable)](const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
 };
 
-auto l5 = []()
+auto al5 = []()
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 };
 
-const auto l6 = []()
+const auto al6 = []()
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+};
+
+auto al7 = [](const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
 };
 
 }
@@ -71,44 +81,55 @@ const auto l6 = []()
 static std::shared_ptr<std::vector<int>> stat_copyable = std::make_shared<std::vector<int>>(50, 0);
 static std::unique_ptr<std::vector<int>> stat_movable = std::make_unique<std::vector<int>>(100, 0);
 
-static void f3(const gusc::Threads::Thread::StopToken&)
+static void sf1(const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 }
 
-static void f4()
+static void sf2()
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 }
 
-static auto l7 = [](const gusc::Threads::Thread::StopToken&)
+static void sf3(const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
+}
+
+
+static auto sl1 = [](const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 };
 
-static const auto l8 = [](const gusc::Threads::Thread::StopToken&)
+static const auto sl2 = [](const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 };
 
-static const auto l9 = [c=stat_copyable](const gusc::Threads::Thread::StopToken&)
+static const auto sl3 = [c=stat_copyable](const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(c->size());
 };
 
-static const auto l10 = [m=std::move(stat_movable)](const gusc::Threads::Thread::StopToken&)
+static const auto sl4 = [m=std::move(stat_movable)](const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
 };
 
-static auto l11 = []()
+static auto sl5 = []()
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
 };
 
-static const auto l12 = []()
+static const auto sl6 = []()
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+};
+
+static auto sl7 = [](const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
 };
 
 struct s1
@@ -180,85 +201,105 @@ void runThreadTests()
     
     // Test simple functions
     {
-        f1(token);
-        gusc::Threads::Thread t(&f1);
+        af1(token);
+        gusc::Threads::Thread t(&af1);
         t.start();
     }
     {
-        f2();
-        gusc::Threads::Thread t(&f2);
+        af2();
+        gusc::Threads::Thread t(&af2);
         t.start();
     }
     {
-        f3(token);
-        gusc::Threads::Thread t(&f3);
+        af3(token, "string");
+        gusc::Threads::Thread t(&af3, std::string("string"));
         t.start();
     }
     {
-        f4();
-        gusc::Threads::Thread t(&f4);
+        sf1(token);
+        gusc::Threads::Thread t(&sf1);
+        t.start();
+    }
+    {
+        sf2();
+        gusc::Threads::Thread t(&sf2);
+        t.start();
+    }
+    {
+        sf3(token, "string");
+        gusc::Threads::Thread t(&sf3, std::string("string"));
         t.start();
     }
     
     // Test lambdas
     {
-        l1(token);
-        gusc::Threads::Thread t(l1);
+        al1(token);
+        gusc::Threads::Thread t(al1);
         t.start();
     }
     {
-        l2(token);
-        gusc::Threads::Thread t(l2);
+        al2(token);
+        gusc::Threads::Thread t(al2);
         t.start();
     }
     {
-        l3(token);
-        gusc::Threads::Thread t(l3);
+        al3(token);
+        gusc::Threads::Thread t(al3);
         t.start();
     }
     {
-        l4(token);
-        gusc::Threads::Thread t(l4);
+        al4(token);
+        gusc::Threads::Thread t(al4);
         t.start();
     }
     {
-        l5();
-        gusc::Threads::Thread t(l5);
+        al5();
+        gusc::Threads::Thread t(al5);
         t.start();
     }
     {
-        l6();
-        gusc::Threads::Thread t(l6);
+        al6();
+        gusc::Threads::Thread t(al6);
         t.start();
     }
     {
-        l7(token);
-        gusc::Threads::Thread t(l7);
+        al7(token, "string");
+        gusc::Threads::Thread t(al7, std::string("string"));
         t.start();
     }
     {
-        l8(token);
-        gusc::Threads::Thread t(l8);
+        sl1(token);
+        gusc::Threads::Thread t(sl1);
         t.start();
     }
     {
-        l9(token);
-        gusc::Threads::Thread t(l9);
+        sl2(token);
+        gusc::Threads::Thread t(sl2);
         t.start();
     }
     {
-        l10(token);
-        gusc::Threads::Thread t(l10);
+        sl3(token);
+        gusc::Threads::Thread t(sl3);
         t.start();
     }
     {
-        l11();
-        gusc::Threads::Thread t(l11);
+        sl4(token);
+        gusc::Threads::Thread t(sl4);
         t.start();
     }
     {
-        l12();
-        gusc::Threads::Thread t(l12);
+        sl5();
+        gusc::Threads::Thread t(sl5);
+        t.start();
+    }
+    {
+        sl6();
+        gusc::Threads::Thread t(sl6);
+        t.start();
+    }
+    {
+        sl7(token, "string");
+        gusc::Threads::Thread t(sl7, std::string("string"));
         t.start();
     }
     {
