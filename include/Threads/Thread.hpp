@@ -13,7 +13,6 @@
 #include <atomic>
 #include <future>
 #include <type_traits>
-#include "private/function_traits.hpp"
 
 #if !defined(_WIN32)
 #   include <pthread.h>
@@ -30,15 +29,6 @@ using IsSameType = std::is_same<
         >::type
     >::type,
     TB
->;
-
-template<class TFn, std::size_t argN, class TArg>
-using IsSameFunctionArgType = std::conjunction<
-    typename function_traits<TFn>::template argExists<argN>,
-    IsSameType<
-        typename function_traits<TFn>::template argument<argN>::type,
-        TArg
-    >
 >;
 
 namespace Threads
@@ -342,19 +332,21 @@ private:
         template<typename T, std::size_t... Is>
         inline
         typename std::enable_if_t<
-            IsSameFunctionArgType<T, 0, StopToken>::value,
+            std::is_invocable<T, StopToken, TArgs...>::value,
             void> callSpec(const StopToken& stopToken, std::index_sequence<Is...>)
         {
-            fn(stopToken, std::get<Is>(args)...);
+            std::cout << "WITH StopToken\n";
+            std::invoke(fn, stopToken, std::get<Is>(args)...);
         }
         
         template<typename T, std::size_t... Is>
         inline
         typename std::enable_if_t<
-            !IsSameFunctionArgType<T, 0, StopToken>::value,
+            !std::is_invocable<T, StopToken, TArgs...>::value,
             void> callSpec(const StopToken&, std::index_sequence<Is...>)
         {
-            fn(std::get<Is>(args)...);
+            std::cout << "without StopToken\n";
+            std::invoke(fn, std::get<Is>(args)...);
         }
     };
     
