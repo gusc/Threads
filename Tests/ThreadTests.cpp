@@ -297,9 +297,11 @@ void runThreadTests()
     {
         auto movable_data1 = std::make_unique<std::vector<int>>(40, 0);
         af4(token, std::move(movable_data1));
-        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
-        gusc::Threads::Thread t(&af4, std::move(movable_data2));
-        t.start();
+        // Because of the Thread's ability to be started and stopped we can not pass movable objects as thread procedure's arguments
+        // as they will be moved away from internal strucutre on the first run, to avoid confusion this use-case has been removed
+//        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
+//        gusc::Threads::Thread t(&af4, std::move(movable_data2));
+//        t.start();
     }
     {
         auto referable_data = std::make_unique<std::vector<int>>(40, 0);
@@ -331,9 +333,11 @@ void runThreadTests()
     {
         auto movable_data1 = std::make_unique<std::vector<int>>(40, 0);
         sf4(token, std::move(movable_data1));
-        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
-        gusc::Threads::Thread t(&sf4, std::move(movable_data2));
-        t.start();
+        // Because of the Thread's ability to be started and stopped we can not pass movable objects as thread procedure's arguments
+        // as they will be moved away from internal strucutre on the first run, to avoid confusion this use-case has been removed
+//        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
+//        gusc::Threads::Thread t(&sf4, std::move(movable_data2));
+//        t.start();
     }
     {
         auto referable_data = std::make_unique<std::vector<int>>(40, 0);
@@ -387,9 +391,11 @@ void runThreadTests()
     {
         auto movable_data1 = std::make_unique<std::vector<int>>(40, 0);
         al8(token, std::move(movable_data1));
-        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
-        gusc::Threads::Thread t(al8, std::move(movable_data2));
-        t.start();
+        // Because of the Thread's ability to be started and stopped we can not pass movable objects as thread procedure's arguments
+        // as they will be moved away from internal strucutre on the first run, to avoid confusion this use-case has been removed
+//        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
+//        gusc::Threads::Thread t(al8, std::move(movable_data2));
+//        t.start();
     }
     {
         auto referable_data = std::make_unique<std::vector<int>>(40, 0);
@@ -441,9 +447,11 @@ void runThreadTests()
     {
         auto movable_data1 = std::make_unique<std::vector<int>>(40, 0);
         sl8(token, std::move(movable_data1));
-        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
-        gusc::Threads::Thread t(sl8, std::move(movable_data2));
-        t.start();
+        // Because of the Thread's ability to be started and stopped we can not pass movable objects as thread procedure's arguments
+        // as they will be moved away from internal strucutre on the first run, to avoid confusion this use-case has been removed
+//        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
+//        gusc::Threads::Thread t(sl8, std::move(movable_data2));
+//        t.start();
     }
     {
         auto referable_data = std::make_unique<std::vector<int>>(40, 0);
@@ -599,9 +607,11 @@ void runThreadTests()
         c1 o;
         auto movable_data1 = std::make_unique<std::vector<int>>(40, 0);
         o.f8(token, std::move(movable_data1));
-        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
-        gusc::Threads::Thread t(std::bind(&c1::f8, &o, std::placeholders::_1, std::placeholders::_2), std::move(movable_data2));
-        t.start();
+        // Because of the Thread's ability to be started and stopped we can not pass movable objects as thread procedure's arguments
+        // as they will be moved away from internal strucutre on the first run, to avoid confusion this use-case has been removed
+//        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
+//        gusc::Threads::Thread t(std::bind(&c1::f8, &o, std::placeholders::_1, std::placeholders::_2), std::move(movable_data2));
+//        t.start();
     }
     {
         c1 o;
