@@ -41,6 +41,21 @@ void af3(const gusc::Threads::Thread::StopToken&, const std::string& additionalA
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
 }
 
+void af4(const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>> m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
+void af5(const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>>& m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
+void af6(const gusc::Threads::Thread::StopToken&, const std::unique_ptr<std::vector<int>>& m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
 auto al1 = [](const gusc::Threads::Thread::StopToken&)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
@@ -76,6 +91,21 @@ auto al7 = [](const gusc::Threads::Thread::StopToken&, const std::string& additi
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
 };
 
+const auto al8 = [](const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>> m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
+const auto al9 = [](const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>>& m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
+const auto al10 = [](const gusc::Threads::Thread::StopToken&, const std::unique_ptr<std::vector<int>>& m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
 }
 
 static std::shared_ptr<std::vector<int>> stat_copyable = std::make_shared<std::vector<int>>(50, 0);
@@ -96,6 +126,20 @@ static void sf3(const gusc::Threads::Thread::StopToken&, const std::string& addi
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
 }
 
+static void sf4(const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>> m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
+static void sf5(const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>>& m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
+static void sf6(const gusc::Threads::Thread::StopToken&, const std::unique_ptr<std::vector<int>>& m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
 
 static auto sl1 = [](const gusc::Threads::Thread::StopToken&)
 {
@@ -130,6 +174,21 @@ static const auto sl6 = []()
 static auto sl7 = [](const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
 {
     tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
+};
+
+static auto sl8 = [](const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>> m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
+static auto sl9 = [](const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>>& m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+};
+
+static auto sl10 = [](const gusc::Threads::Thread::StopToken&, const std::unique_ptr<std::vector<int>>& m)
+{
+    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
 };
 
 struct s1
@@ -190,6 +249,26 @@ public:
     {
         tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
     }
+    
+    void f7 (const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
+    };
+
+    void f8 (const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>> m)
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    };
+    
+    void f9 (const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>>& m)
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    };
+    
+    void f10(const gusc::Threads::Thread::StopToken&, const std::unique_ptr<std::vector<int>>& m)
+    {
+        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    };
 };
 
 void runThreadTests()
@@ -216,6 +295,25 @@ void runThreadTests()
         t.start();
     }
     {
+        auto movable_data1 = std::make_unique<std::vector<int>>(40, 0);
+        af4(token, std::move(movable_data1));
+        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
+        gusc::Threads::Thread t(&af4, std::move(movable_data2));
+        t.start();
+    }
+    {
+        auto referable_data = std::make_unique<std::vector<int>>(40, 0);
+        af5(token, referable_data);
+        gusc::Threads::Thread t(&af5, std::ref(referable_data));
+        t.start();
+    }
+    {
+        auto referable_data = std::make_unique<std::vector<int>>(40, 0);
+        af6(token, referable_data);
+        gusc::Threads::Thread t(&af6, std::ref(referable_data));
+        t.start();
+    }
+    {
         sf1(token);
         gusc::Threads::Thread t(&sf1);
         t.start();
@@ -228,6 +326,25 @@ void runThreadTests()
     {
         sf3(token, "string");
         gusc::Threads::Thread t(&sf3, std::string("string"));
+        t.start();
+    }
+    {
+        auto movable_data1 = std::make_unique<std::vector<int>>(40, 0);
+        sf4(token, std::move(movable_data1));
+        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
+        gusc::Threads::Thread t(&sf4, std::move(movable_data2));
+        t.start();
+    }
+    {
+        auto referable_data = std::make_unique<std::vector<int>>(40, 0);
+        sf5(token, referable_data);
+        gusc::Threads::Thread t(&sf5, std::ref(referable_data));
+        t.start();
+    }
+    {
+        auto referable_data = std::make_unique<std::vector<int>>(40, 0);
+        sf6(token, referable_data);
+        gusc::Threads::Thread t(&sf6, std::ref(referable_data));
         t.start();
     }
     
@@ -268,6 +385,25 @@ void runThreadTests()
         t.start();
     }
     {
+        auto movable_data1 = std::make_unique<std::vector<int>>(40, 0);
+        al8(token, std::move(movable_data1));
+        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
+        gusc::Threads::Thread t(al8, std::move(movable_data2));
+        t.start();
+    }
+    {
+        auto referable_data = std::make_unique<std::vector<int>>(40, 0);
+        al9(token, referable_data);
+        gusc::Threads::Thread t(al9, std::ref(referable_data));
+        t.start();
+    }
+    {
+        auto referable_data = std::make_unique<std::vector<int>>(40, 0);
+        al10(token, referable_data);
+        gusc::Threads::Thread t(al10, std::ref(referable_data));
+        t.start();
+    }
+    {
         sl1(token);
         gusc::Threads::Thread t(sl1);
         t.start();
@@ -300,6 +436,25 @@ void runThreadTests()
     {
         sl7(token, "string");
         gusc::Threads::Thread t(sl7, std::string("string"));
+        t.start();
+    }
+    {
+        auto movable_data1 = std::make_unique<std::vector<int>>(40, 0);
+        sl8(token, std::move(movable_data1));
+        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
+        gusc::Threads::Thread t(sl8, std::move(movable_data2));
+        t.start();
+    }
+    {
+        auto referable_data = std::make_unique<std::vector<int>>(40, 0);
+        sl9(token, referable_data);
+        gusc::Threads::Thread t(sl9, std::ref(referable_data));
+        t.start();
+    }
+    {
+        auto referable_data = std::make_unique<std::vector<int>>(40, 0);
+        sl10(token, referable_data);
+        gusc::Threads::Thread t(sl10, std::ref(referable_data));
         t.start();
     }
     {
@@ -434,7 +589,34 @@ void runThreadTests()
         gusc::Threads::Thread t(&c1::f6);
         t.start();
     }
-    
+    {
+        c1 o;
+        o.f7(token, "string");
+        gusc::Threads::Thread t(std::bind(&c1::f7, &o, std::placeholders::_1, std::placeholders::_2), std::string("string"));
+        t.start();
+    }
+    {
+        c1 o;
+        auto movable_data1 = std::make_unique<std::vector<int>>(40, 0);
+        o.f8(token, std::move(movable_data1));
+        auto movable_data2 = std::make_unique<std::vector<int>>(40, 0);
+        gusc::Threads::Thread t(std::bind(&c1::f8, &o, std::placeholders::_1, std::placeholders::_2), std::move(movable_data2));
+        t.start();
+    }
+    {
+        c1 o;
+        auto referable_data = std::make_unique<std::vector<int>>(40, 0);
+        o.f9(token, referable_data);
+        gusc::Threads::Thread t(std::bind(&c1::f9, &o, std::placeholders::_1, std::placeholders::_2), std::ref(referable_data));
+        t.start();
+    }
+    {
+        c1 o;
+        auto referable_data = std::make_unique<std::vector<int>>(40, 0);
+        o.f10(token, referable_data);
+        gusc::Threads::Thread t(std::bind(&c1::f10, &o, std::placeholders::_1, std::placeholders::_2), std::ref(referable_data));
+        t.start();
+    }
     
     // Test ThisThread
     {
