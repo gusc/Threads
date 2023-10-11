@@ -17,7 +17,7 @@ Library provides an `std::thread` wrapper with:
 
 * delayed start - you can set up your thread and start it later
 * stop signaling - your thread procedure can receive a `const Thread::StopToken&` via which you can check whether someone has signaled the thread to stop
-* start signaling - `Thread::strat` returns a `Thread::StartToken&` which allows you to wait until thread procedure has actually started
+* start signaling - `Thread::start` returns a `Thread::StartToken&` which allows you to wait until thread procedure has actually started
 
 `Thread` methods:
 
@@ -37,6 +37,10 @@ Additionally library provides a `ThisThread` class to execute procedure in `Thre
 
 `ThisThread` extends from `Thread` and starts thread procedure when `start()` is called effectivelly blocking current thread until someone calls `stop()` and your thread procedure handles stopping signal.
 
+### ThreadPool class
+
+WIP
+
 ### Examples
 
 For actual real-world usage examples see [Examples directory](./Examples) and [Tests directory](./Tests)
@@ -49,7 +53,7 @@ This library provides a task queue which allows posting more complex tasks on a 
 * tasks that return a handle from which you can cancel, check if task has executed and even get an asychronous results
 * tasks that can block current thread and wait until it's executed 
 
-`TaskQueue` is a base class for any style of queueing mechanism. The final implementation is `SerialTaskQueue` which runs on a single thread and processes tasks in-order.
+`TaskQueue` is a base class for any style of queueing mechanism. The final implementation is `SerialTaskQueue` which runs on a single thread and processes tasks in-order (there is a `ParallelTaskQueue` planned that will use `ThreadPool` which is also WIP).
 
 `TaskQueue` constructors:
 
@@ -97,6 +101,10 @@ Utility methods:
 The implementation of serial task queue is based on `TaskQueue` with serial run-loop logic.
 
 * `SerialTaskQueue(ThisThread& initThread)` - special constructor to place serial task queue on `ThisThread`
+
+### ParallelTaskQueue class
+
+WIP
 
 ### Examples
 
