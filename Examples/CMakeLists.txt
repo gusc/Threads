@@ -3,6 +3,8 @@ project(ThreadsExamples VERSION 1.0.0 LANGUAGES CXX)
 
 set(SOURCES
 	"main.cpp"
+	"TaskQueueExamples.hpp"
+	"TaskQueueExamples.cpp"
 	"ThreadExamples.hpp"
 	"ThreadExamples.cpp"
 )

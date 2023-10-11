@@ -7,8 +7,10 @@
 //
 
 #include "ThreadExamples.hpp"
+#include "TaskQueueExamples.hpp"
 
 int main(int argc, const char * argv[]) {
     runThreadExamples();
+    runTaskQueueExamples();
     return 0;
 }
