@@ -13,80 +13,43 @@ This is a C++17 library that provides threads with message queues and signal mec
 
 ## Thread class
 
-Library provides an `std::thread` wrapper with an internal run-loop and a callable object queue. Whenever a callable object get's sent to the thread, it's placed on a queue and when time comes it's `operator()` method is executed in that thread.
+Library provides an `std::thread` wrapper with:
 
-This gives you options to post worker functions to be executed in different threads.
+* delayed start - you can set up your thread and start it later
+* stop signaling - your thread procedure can receive a `const Thread::StopToken&` via which you can check whether someone has signaled the thread to stop
+* start signaling - `Thread::strat` returns a `Thread::StartToken&` which allows you to wait until thread procedure has actually started
 
 `Thread` methods:
 
-* `void run(const TCallable&)` - place a callabable object on the runnable queue (the thread must be started!)
-* `void start()` - start running the thread, also start accepting new runnables
-* `void stop()` - signal the thread to stop - this will make the thread stop accepting new runnables, but it will still continue processing messages in the queue
-* `void join()` - wait for the thread to finish
+* `Thread(TFunction&&, TArgs&&...)` - constructor accepting any kind of callable objects and additional arguments (there is a special case for function that accepts `[const ]Thread::StopToken[&]` as it's first argument)
+* `Thread::StartToken& start()` - start running the thread, returns a start token which can be used to wait for the thread procedure to actually start
+* `void stop()` - signal the thread to stop - this will signal the `Thread::StopToken` which you can then check on your thread procedure via `Thread::StopToken::getIsStopping()` method
+* `void join()` - join the thread if it has started and is joinable
+* `std::thread::id getId()` - get wrapped thread ID (if the thread is started)
+* `bool getIsStarted()` - check whether the thread has been started (this does not mean the thread procedure has actually started running)
+* `bool getIsStopping()` - check whether the thread has been signaled for stopping (this does not mean the thread procedure has actually stopped)
 
 `Thread` class automatically joins on destruction.
 
-## ThisThread class
+### ThisThread class
 
-Additionally library provides a `ThisThread` class to execute run-loop on current thread. This is intended to be used only on a main thread or any other thread that was not started by `Thread` class.
+Additionally library provides a `ThisThread` class to execute procedure in `Thread` context. This is intended to be used only on a main thread or any other current thread that was not started by `Thread` class to use in a similar manner as `Thread` objects.
 
-`ThisThread` extends from `Thread` and starts run loop when `start()` is called effectivelly blocking current thread until someone calls `stop()` (which can be done either through a message or before calling `start()`).
+`ThisThread` extends from `Thread` and starts thread procedure when `start()` is called effectivelly blocking current thread until someone calls `stop()` and your thread procedure handles stopping signal.
 
-## Examples
+### Examples
 
-This will make the each lambda run on a different thread:
+For actual real-world usage examples see [Examples directory](./Examples) and [Tests directory](./Tests)
 
-```c++
-{
-    gusc::Threads::Thread th1;
-    gusc::Threads::Thread th2;
-    
-    auto id = std::this_thread::get_id();
-    std::cout << "Main thread ID: " << id << std::endl;
-    
-    // You have to start threads to process all the messages
-    th1.start();
-    th2.start();
-    
-    // Place messages on both threads
-    th1.run([](){
-        auto id = std::this_thread::get_id();
-        std::cout << "This is a worker on thread ID: " << id << std::endl;
-    });
-    
-    th2.run([](){
-        auto id = std::this_thread::get_id();
-        std::cout << "This is a worker on thread ID: " << id << std::endl;
-    });
-    
-    // Both threads will be joined up on thread object destruction
-}
-```
-
-Example with `ThisThread` - this will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.stop()` call.
-
-```c++
-gusc::Threads::ThisThread mt;
-
-mt.run([&mt](){
-    auto id = std::this_thread::get_id();
-    std::cout << "This is a worker on thread ID: " << id << std::endl;
-    
-    // You can quit the main thread run-loop from anywhere
-    mt.stop();
-});
-
-// Start the run-loop
-mt.start();
-```
-
-## Task Queue
+## TaskQueue class
 
 This library provides a task queue which allows posting more complex tasks on a thread that includes:
 
 * tasks that are simply run whenever thread becomes free
 * tasks that return a handle from which you can cancel, check if task has executed and even get an asychronous results
 * tasks that can block current thread and wait until it's executed 
+
+`TaskQueue` is a base class for any style of queueing mechanism. The final implementation is `SerialTaskQueue` which runs on a single thread and processes tasks in-order.
 
 `TaskQueue` methods:
 

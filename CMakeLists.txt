@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.18)
 project(Threads VERSION 1.0.0 LANGUAGES CXX)
 
-option(Threads_BuildTests "Build the unit tests when BUILD_TESTING is enabled." ON)
+option(Threads_BuildTests "Build the unit tests." ON)
+option(Threads_BuildExamples "Build the examples." ON)
 
 set(SOURCES
 	"include/Threads/Signal.hpp"
@@ -24,6 +25,9 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 )
 
 include(CTest)
-if(BUILD_TESTING AND Threads_BuildTests)
+if(Threads_BuildTests)
     add_subdirectory(Tests)
+endif()
+if(Threads_BuildExamples)
+    add_subdirectory(Examples)
 endif()

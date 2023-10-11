@@ -217,6 +217,11 @@ public:
         return isStarted;
     }
     
+    inline bool getIsStopping() const noexcept
+    {
+        return stopToken.getIsStopping();
+    }
+    
 protected:
     inline void run()
     {
