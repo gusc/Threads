@@ -124,10 +124,16 @@ public:
     Thread& operator=(Thread&&) = delete;
     virtual ~Thread()
     {
-        if (getIsStarted())
+        try
         {
-            stopToken.notifyStop();
+            if (getIsStarted())
+            {
+                stopToken.notifyStop();
+            }
             join();
+        }
+        catch (...)
+        {
         }
     }
     
@@ -170,7 +176,7 @@ public:
     /// @brief join the thread and wait unti it's finished
     virtual inline void join()
     {
-        if (getIsStarted() && thread.joinable())
+        if (thread.joinable())
         {
             thread.join();
         }
