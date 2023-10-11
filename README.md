@@ -11,6 +11,20 @@ Then this is the library for you!
 
 This is a C++17 library that provides threads with message queues and signal mechanism with full control in which thread the signal's listener will be executed.
 
+Table of contents:
+
+* [Thread class](#thread-class)
+    * [ThisThread class](#thisthread-class)
+    * [ThreadPool class](#threadpool-class)
+    * [Examples](#examples)
+* [TaskQueue class](#taskqueue-class)
+    * [SerialTaskQueue class](#serialtaskqueue-class)
+    * [ParallelTaskQueue class](#paralleltaskqueue-class)
+    * [Examples](#examples-1)
+* [Signals with listener slots](#signals-with-listener-slots)
+    * [Signal class](#signal-class)
+    * [Examples](#examples-2)
+
 ## Thread class
 
 Library provides an `std::thread` wrapper with:
