@@ -390,9 +390,9 @@ protected:
         {
             return time < other.getTime();
         }
-        inline std::shared_ptr<Task> moveTask()
+        inline std::shared_ptr<Task>& getTask()
         {
-            return std::move(task);
+            return task;
         }
         inline std::chrono::time_point<std::chrono::steady_clock> getTime() const noexcept
         {
@@ -410,7 +410,7 @@ protected:
         {
             if ((*it)->getTime() < timeNow)
             {
-                auto ptr = (*it)->moveTask();
+                auto& ptr = (*it)->getTask();
                 if (ptr)
                 {
                     taskQueue.emplace(std::move(ptr));
