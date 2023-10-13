@@ -118,6 +118,13 @@ public:
             throw std::runtime_error("Task queue is not accepting any tasks, the thread has been signaled for stopping");
         }
     }
+    template<typename TCallable>
+    inline void send(TCallable& newTask)
+    {
+        // Enforce reference to create a copy
+        TCallable tmp = newTask;
+        send(std::move(tmp));
+    }
     
     /// @brief send a delayed task that needs to be executed on this thread
     /// @param newTask - any callable object that will be executed on this thread
@@ -140,6 +147,13 @@ public:
         {
             throw std::runtime_error("Task queue is not accepting any tasks, the thread has been signaled for stopping");
         }
+    }
+    template<typename TCallable>
+    inline TaskHandle sendDelayed(TCallable& newTask, const std::chrono::milliseconds& timeout)
+    {
+        // Enforce reference to create a copy
+        TCallable tmp = newTask;
+        return sendDelayed(std::move(tmp), timeout);
     }
     
     /// @brief send an asynchronous task that returns value and needs to be executed on this thread (calling thread is not blocked)
@@ -172,6 +186,13 @@ public:
             throw std::runtime_error("Task queue is not accepting any tasks, the thread has been signaled for stopping");
         }
     }
+    template<typename TReturn, typename TCallable>
+    inline TaskHandleWithFuture<TReturn> sendAsync(TCallable& newTask)
+    {
+        // Enforce reference to create a copy
+        TCallable tmp = newTask;
+        return sendAsync(std::move(tmp));
+    }
     
     /// @brief send a synchronous task that returns value and needs to be executed on this thread (calling thread is blocked until task returns)
     /// @note to prevent deadlocking this method throws exception if called before thread has started
@@ -186,6 +207,13 @@ public:
         auto handle = sendAsync<TReturn>(std::forward<TCallable>(newTask));
         return handle.getValue();
     }
+    template<typename TReturn, typename TCallable>
+    inline TReturn sendSync(TCallable& newTask)
+    {
+        // Enforce reference to create a copy
+        TCallable tmp = newTask;
+        return sendSync(std::move(tmp));
+    }
     
     /// @brief send a task that needs to be executed on this thread and wait for it's completion
     /// @param newTask - any callable object that will be executed on this thread
@@ -194,7 +222,14 @@ public:
     {
         sendSync<void>(std::forward<TCallable>(newTask));
     }
-    
+    template<typename TCallable>
+    inline void sendWait(TCallable& newTask)
+    {
+        // Enforce reference to create a copy
+        TCallable tmp = newTask;
+        sendWait(std::move(tmp));
+    }
+
     /// @brief Create a sub-queue who's ownership will be transfered to the caller
     inline std::shared_ptr<TaskQueue> createSubQueue()
     {
