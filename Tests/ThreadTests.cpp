@@ -28,82 +28,82 @@ std::unique_ptr<std::vector<int>> anon_movable = std::make_unique<std::vector<in
 
 void af1(const gusc::Threads::Thread::StopToken&)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 }
 
 void af2()
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 }
 
 void af3(const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + additionalArg;
 }
 
 void af4(const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>> m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 void af5(const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>>& m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 void af6(const gusc::Threads::Thread::StopToken&, const std::unique_ptr<std::vector<int>>& m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 auto al1 = [](const gusc::Threads::Thread::StopToken&)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 };
 
 const auto al2 = [](const gusc::Threads::Thread::StopToken&)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 };
 
 const auto al3 = [c=anon_copyable](const gusc::Threads::Thread::StopToken&)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(c->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(c->size());
 };
 
 const auto al4 = [m=std::move(anon_movable)](const gusc::Threads::Thread::StopToken&)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 auto al5 = []()
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 };
 
 const auto al6 = []()
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 };
 
 auto al7 = [](const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + additionalArg;
 };
 
 const auto al8 = [](const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>> m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 const auto al9 = [](const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>>& m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 const auto al10 = [](const gusc::Threads::Thread::StopToken&, const std::unique_ptr<std::vector<int>>& m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 }
@@ -113,89 +113,89 @@ static std::unique_ptr<std::vector<int>> stat_movable = std::make_unique<std::ve
 
 static void sf1(const gusc::Threads::Thread::StopToken&)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 }
 
 static void sf2()
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 }
 
 static void sf3(const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + additionalArg;
 }
 
 static void sf4(const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>> m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 static void sf5(const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>>& m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 static void sf6(const gusc::Threads::Thread::StopToken&, const std::unique_ptr<std::vector<int>>& m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 static auto sl1 = [](const gusc::Threads::Thread::StopToken&)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 };
 
 static const auto sl2 = [](const gusc::Threads::Thread::StopToken&)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 };
 
 static const auto sl3 = [c=stat_copyable](const gusc::Threads::Thread::StopToken&)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(c->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(c->size());
 };
 
 static const auto sl4 = [m=std::move(stat_movable)](const gusc::Threads::Thread::StopToken&)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 static auto sl5 = []()
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 };
 
 static const auto sl6 = []()
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
 };
 
 static auto sl7 = [](const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + additionalArg;
 };
 
 static auto sl8 = [](const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>> m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 static auto sl9 = [](const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>>& m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 static auto sl10 = [](const gusc::Threads::Thread::StopToken&, const std::unique_ptr<std::vector<int>>& m)
 {
-    tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
 };
 
 struct s1
 {
     void operator()(const gusc::Threads::Thread::StopToken&) const
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
     }
 };
 
@@ -203,7 +203,7 @@ struct s2
 {
     void operator()() const
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
     }
 };
 
@@ -211,7 +211,7 @@ struct s3
 {
     void operator()() const
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(data->size());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(data->size());
     }
     
     std::unique_ptr<std::vector<int>> data = std::make_unique<std::vector<int>>(10, 0);
@@ -222,60 +222,62 @@ class c1
 public:
     void f1(const gusc::Threads::Thread::StopToken&)
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
     }
     
     void f2(const gusc::Threads::Thread::StopToken&) const
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
     }
     
     static void f3(const gusc::Threads::Thread::StopToken&)
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
     }
     
     void f4()
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
     }
     
     void f5() const
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
     }
     
     static void f6()
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
     }
     
     void f7 (const gusc::Threads::Thread::StopToken&, const std::string& additionalArg)
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << additionalArg;
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + additionalArg;
     };
 
     void f8 (const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>> m)
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
     };
     
     void f9 (const gusc::Threads::Thread::StopToken&, std::unique_ptr<std::vector<int>>& m)
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
     };
     
     void f10(const gusc::Threads::Thread::StopToken&, const std::unique_ptr<std::vector<int>>& m)
     {
-        tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
     };
 };
 
 void runThreadTests()
 {
+    tlog << "========================";
     tlog << "Thread Tests";
     tlog << "Main thread ID: " + tidToStr(std::this_thread::get_id());
-
+    tlog << "========================";
+    
     gusc::Threads::Thread::StopToken token;
     
     // Test simple functions
@@ -468,7 +470,7 @@ void runThreadTests()
     {
         tlog << "Local lambda";
         auto local = [](const gusc::Threads::Thread::StopToken&) {
-            tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
         };
         local(token);
         gusc::Threads::Thread t(local);
@@ -478,7 +480,7 @@ void runThreadTests()
         // Anonymous copyable
         tlog << "Annonymous copyable lambda";
         gusc::Threads::Thread t([](const gusc::Threads::Thread::StopToken&) {
-            tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id());
+            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
         });
         t.start();
     }
@@ -487,7 +489,7 @@ void runThreadTests()
         tlog << "Annonymous movable lambda";
         std::unique_ptr<std::vector<int>> local_movable = std::make_unique<std::vector<int>>(100, 0);
         gusc::Threads::Thread t([m=std::move(local_movable)](const gusc::Threads::Thread::StopToken&) {
-            tlog << "Function: " <<  __func__ << " ID: " << tidToStr(std::this_thread::get_id()) << " X: " << std::to_string(m->size());
+            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
         });
         t.start();
     }
@@ -661,6 +663,10 @@ void runThreadTests()
         t.stop();
         t.join();
     }
+    
+    tlog << "========================";
+    tlog << "Done";
+    tlog << "========================";
     
     tlog.flush();
 }
