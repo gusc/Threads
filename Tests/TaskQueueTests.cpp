@@ -119,6 +119,14 @@ void runTaskQueueTests()
     t2.send([](){
         tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
+    auto movable_data1 = std::make_unique<std::vector<int>>(10, 0);
+    t1.send([m=std::move(movable_data1)](){
+        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id()) + " X: " + std::to_string(m->size());
+    });
+    auto movable_data2 = std::make_unique<std::vector<int>>(10, 0);
+    t2.send([m=std::move(movable_data2)](){
+        tlog << "Anonymous lambda thread ID: " + tidToStr(std::this_thread::get_id()) + " X: " + std::to_string(m->size());
+    });
     
     // Test blocking before start
     try
