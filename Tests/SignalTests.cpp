@@ -31,9 +31,9 @@ public:
     }
     Object(const Object&) = default;
     Object& operator=(const Object&) = default;
-    Object(Object&&) = delete;
-    Object& operator=(Object&&) = delete;
-    ~Object() {}
+    Object(Object&&) = default;
+    Object& operator=(Object&&) = default;
+    ~Object() = default;
     
     std::string getVal() const noexcept
     {
@@ -196,7 +196,7 @@ void runSignalTests()
     sigSimple.emit();
     sigArgs.emit(1, false);
     sigObject.emit(o);
-    std::async([&sigSimple, &sigArgs, &sigObject]()
+    auto future = std::async([&sigSimple, &sigArgs, &sigObject]()
     {
         Object o{"QWERTY"};
         sigSimple.emit();
