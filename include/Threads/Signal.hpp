@@ -6,8 +6,8 @@
 //  Copyright © 2020 Gusts Kaksis. All rights reserved.
 //
 
-#ifndef Signal_hpp
-#define Signal_hpp
+#ifndef GUSC_SIGNAL_HPP
+#define GUSC_SIGNAL_HPP
 
 #include "TaskQueue.hpp"
 
@@ -217,7 +217,12 @@ public:
         for (const auto& slot : slots)
         {
             // TODO: think of ways to prevent locking emitMutex while calling
-            slot->call(data...);
+            try
+            {
+                slot->call(data...);
+            }
+            catch (...)
+            {}
         }
     }
     
@@ -449,8 +454,13 @@ public:
         std::lock_guard<std::mutex> lock(emitMutex);
         for (const auto& slot : slots)
         {
-            // TODO: think of ways to prevent locking emitMutex while calling
-            slot->call();
+            // TODO: think of ways to prevent locking emitMutex while 
+            try
+            {
+                slot->call();
+            }
+            catch (...)
+            {}
         }
     }
 
@@ -495,4 +505,4 @@ private:
 }
 } // namespace gusc::Threads
     
-#endif /* Signal_hpp */
+#endif /* GUSC_SIGNAL_HPP */

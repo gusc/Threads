@@ -3,3 +3,4 @@
 build/*
 build_macos
 build_windows
+.DS_Store

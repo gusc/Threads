@@ -11,76 +11,55 @@ Then this is the library for you!
 
 This is a C++17 library that provides threads with message queues and signal mechanism with full control in which thread the signal's listener will be executed.
 
+Table of contents:
+
+* [Thread class](#thread-class)
+    * [ThisThread class](#thisthread-class)
+    * [ThreadPool class](#threadpool-class)
+    * [Examples](#examples)
+* [TaskQueue class](#taskqueue-class)
+    * [SerialTaskQueue class](#serialtaskqueue-class)
+    * [ParallelTaskQueue class](#paralleltaskqueue-class)
+    * [Examples](#examples-1)
+* [Signals with listener slots](#signals-with-listener-slots)
+    * [Signal class](#signal-class)
+    * [Examples](#examples-2)
+
 ## Thread class
 
-Library provides an `std::thread` wrapper with an internal run-loop and a callable object queue. Whenever a callable object get's sent to the thread, it's placed on a queue and when time comes it's `operator()` method is executed in that thread.
+Library provides an `std::thread` wrapper with:
 
-This gives you options to post worker functions to be executed in different threads.
+* delayed start - you can set up your thread and start it later
+* stop signaling - your thread procedure can receive a `const Thread::StopToken&` via which you can check whether someone has signaled the thread to stop
+* start signaling - `Thread::start` returns a `Thread::StartToken&` which allows you to wait until thread procedure has actually started
 
 `Thread` methods:
 
-* `void run(const TCallable&)` - place a callabable object on the runnable queue (the thread must be started!)
-* `void start()` - start running the thread, also start accepting new runnables
-* `void stop()` - signal the thread to stop - this will make the thread stop accepting new runnables, but it will still continue processing messages in the queue
-* `void join()` - wait for the thread to finish
+* `Thread(TFunction&&, TArgs&&...)` - constructor accepting any kind of callable objects and additional arguments (there is a special case for function that accepts `[const ]Thread::StopToken[&]` as it's first argument)
+* `Thread::StartToken& start()` - start running the thread, returns a start token which can be used to wait for the thread procedure to actually start
+* `void stop()` - signal the thread to stop - this will signal the `Thread::StopToken` which you can then check on your thread procedure via `Thread::StopToken::getIsStopping()` method
+* `void join()` - join the thread if it has started and is joinable
+* `std::thread::id getId()` - get wrapped thread ID (if the thread is started)
+* `bool getIsStarted()` - check whether the thread has been started (this does not mean the thread procedure has actually started running)
+* `bool getIsStopping()` - check whether the thread has been signaled for stopping (this does not mean the thread procedure has actually stopped)
 
 `Thread` class automatically joins on destruction.
 
-## ThisThread class
+### ThisThread class
 
-Additionally library provides a `ThisThread` class to execute run-loop on current thread. This is intended to be used only on a main thread or any other thread that was not started by `Thread` class.
+Additionally library provides a `ThisThread` class to execute procedure in `Thread` context. This is intended to be used only on a main thread or any other current thread that was not started by `Thread` class to use in a similar manner as `Thread` objects.
 
-`ThisThread` extends from `Thread` and starts run loop when `start()` is called effectivelly blocking current thread until someone calls `stop()` (which can be done either through a message or before calling `start()`).
+`ThisThread` extends from `Thread` and starts thread procedure when `start()` is called effectivelly blocking current thread until someone calls `stop()` and your thread procedure handles stopping signal.
 
-## Examples
+### ThreadPool class
 
-This will make the each lambda run on a different thread:
+WIP
 
-```c++
-{
-    gusc::Threads::Thread th1;
-    gusc::Threads::Thread th2;
-    
-    auto id = std::this_thread::get_id();
-    std::cout << "Main thread ID: " << id << std::endl;
-    
-    // You have to start threads to process all the messages
-    th1.start();
-    th2.start();
-    
-    // Place messages on both threads
-    th1.run([](){
-        auto id = std::this_thread::get_id();
-        std::cout << "This is a worker on thread ID: " << id << std::endl;
-    });
-    
-    th2.run([](){
-        auto id = std::this_thread::get_id();
-        std::cout << "This is a worker on thread ID: " << id << std::endl;
-    });
-    
-    // Both threads will be joined up on thread object destruction
-}
-```
+### Examples
 
-Example with `ThisThread` - this will run a run-loop in current thread and when the lambda is executed it will stop the run loop with the  `mt.stop()` call.
+For actual real-world usage examples see [Examples directory](./Examples) and [Tests directory](./Tests)
 
-```c++
-gusc::Threads::ThisThread mt;
-
-mt.run([&mt](){
-    auto id = std::this_thread::get_id();
-    std::cout << "This is a worker on thread ID: " << id << std::endl;
-    
-    // You can quit the main thread run-loop from anywhere
-    mt.stop();
-});
-
-// Start the run-loop
-mt.start();
-```
-
-## Task Queue
+## TaskQueue class
 
 This library provides a task queue which allows posting more complex tasks on a thread that includes:
 
@@ -88,61 +67,62 @@ This library provides a task queue which allows posting more complex tasks on a 
 * tasks that return a handle from which you can cancel, check if task has executed and even get an asychronous results
 * tasks that can block current thread and wait until it's executed 
 
-`TaskQueue` methods:
+`TaskQueue` is a base class for any style of queueing mechanism. The final implementation is `SerialTaskQueue` which runs on a single thread and processes tasks in-order (there is a `ParallelTaskQueue` planned that will use `ThreadPool` which is also WIP).
+
+`TaskQueue` constructors:
+
+* `TaskQueue(const std::function<void(void)>& initQueueNotifyCallback)` - construct new task queue with notify callback, the callback get's called whenever a task queue changes it's contents
+
+`TaskQueue` task methods:
 
 * `void send(const TCallable&)` - place a callabable object on the task queue
 * `TaskHandle sendDelayed(const TCallable&, const std::chrono:milliseconds&)` - place a callabable object on the message queue and execute it after set delay time has elapsed (this method also returns a `TaskHandle` object that allows to cancel the message while it's delay hasn't elapsed).
 * `TaskHandleWithResult<TReturn> sendAsync<TReturn>(const TCallable&)` - place a callabable object that can return value asynchronously on the task queue (this message return `TaskHandleWithResult<TReturn>` - similar to `TaskHandle`, but it can also be use to block current thread until the task has finished or exception has occured.
 * `TReturn sendSync<TReturn>(const TCallable&)` - place a callabable object that can return value synchronously on the task queue (this blocks calling thread until the callable finishes and returns)
-* `void sendWait(const TCallable&)` - place a callable object on the task queue and block until it's executed
-queue
+* `void sendWait(const TCallable&)` - place a callable object on the task queue and block until it's executed queue
+* `void cancelAll()` - cancel all pending tasks
+
+Sub-queue creation methods:
+
+* `std::shared_ptr<TaskQueue> createSubQueue()` - create new queue that acts as a sub-queue of current queue
+
+Notes about sub-queues:
+
+1. all the tasks placed in sub-queue will be processed in the parent queues thread
+2. delayed tasks will be moved to parent queue only after delay time has elapsed
+3. on destruction all tasks are cancelled automatically (as opposed to tasks assigned to main queue)
+
+Utility methods:
+
+* `bool getIsSameThread()` - check if we are accessing this queue on the same thread as the queue itself
+* `bool getAcceptsTasks()` - check if task queue is accepting new tasks (it might not accept tasks if it's not started or is stopped)
 
 `TaskQueue` class always finishes all the tasks on the queue on destruction and cancels all the delayed tasks.
 
 *Blocking call warning*: Sending a blocking message on a task queue that is not started will result in an exception!
 
-## Examples
+`TaskHandle` methods:
 
-This will make the each lambda run on a different thread:
+* `void cancel()` - cancel task if it's not yet started 
 
-```c++
-{
-    gusc::Threads::TaskQueue tq;
-    
-    auto id = std::this_thread::get_id();
-    std::cout << "Main thread ID: " << id << std::endl;
-    
-    // You have to start threads to process all the messages
-    tq.start();
-    
-    // Place messages on both threads
-    tq.send([](){
-        auto id = std::this_thread::get_id();
-        std::cout << "This is a worker on thread ID: " << id << std::endl;
-    });
-    
-    th2.send([](){
-        auto id = std::this_thread::get_id();
-        std::cout << "This is a worker on thread ID: " << id << std::endl;
-    });
-    
-    // Place a synchronous message - this blocks current thread until the th1 finishes this miessage
-    th1.sendWait([](){
-       
-    });
-    
-    // Place a message returning a synchronous result
-    auto result1 = th1.sendSync<int>([]() -> int {
-        return 1;
-    });
-    
-    // Place a message returning an asynchronous result via std::future
-    auto f = th2.sendAsync<bool>([]() -> bool {
-        return true;
-    });
-    auto result2 = f.getValue();
-}
-```
+`TaskHandleWithFuture<TResult>` methods:
+
+* `void cancel()` - cancel task if it's not yet started 
+* `TResult getValue()` - acquire the return value of the task (blocks and waits if task has not been finished yet)
+
+### SerialTaskQueue class
+
+The implementation of serial task queue is based on `TaskQueue` with serial run-loop logic.
+
+* `SerialTaskQueue(ThisThread& initThread)` - special constructor to place serial task queue on `ThisThread`
+
+### ParallelTaskQueue class
+
+WIP
+
+### Examples
+
+For actual real-world usage examples see [Examples directory](./Examples) and [Tests directory](./Tests)
 
 ## Signals with listener slots
 
