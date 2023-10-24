@@ -217,7 +217,12 @@ public:
         for (const auto& slot : slots)
         {
             // TODO: think of ways to prevent locking emitMutex while calling
-            slot->call(data...);
+            try
+            {
+                slot->call(data...);
+            }
+            catch (...)
+            {}
         }
     }
     
@@ -449,8 +454,13 @@ public:
         std::lock_guard<std::mutex> lock(emitMutex);
         for (const auto& slot : slots)
         {
-            // TODO: think of ways to prevent locking emitMutex while calling
-            slot->call();
+            // TODO: think of ways to prevent locking emitMutex while 
+            try
+            {
+                slot->call();
+            }
+            catch (...)
+            {}
         }
     }
 
