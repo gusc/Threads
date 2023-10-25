@@ -167,10 +167,6 @@ public:
         {
             stopToken.notifyStop();
         }
-        else
-        {
-            throw std::runtime_error("Thread has not been started");
-        }
     }
     
     /// @brief join the thread and wait unti it's finished
