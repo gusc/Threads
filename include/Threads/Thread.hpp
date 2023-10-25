@@ -18,18 +18,10 @@
 #   include <pthread.h>
 #endif
 
+#include "private/Utilities.hpp"
+
 namespace gusc
 {
-
-template<class TA, class TB>
-using IsSameType = std::is_same<
-    typename std::decay<
-        typename std::remove_cv<
-            typename std::remove_reference<TA>::type
-        >::type
-    >::type,
-    TB
->;
 
 namespace Threads
 {
@@ -167,10 +159,6 @@ public:
         {
             stopToken.notifyStop();
         }
-        else
-        {
-            throw std::runtime_error("Thread has not been started");
-        }
     }
     
     /// @brief join the thread and wait unti it's finished
@@ -223,7 +211,7 @@ public:
     }
     
 protected:
-    inline void run()
+    inline void run() noexcept
     {
 #if defined(__APPLE__)
         if (!threadName.empty())
@@ -232,9 +220,9 @@ protected:
         }
 #endif
         startToken.isStarted = true;
-        startPromise.set_value();
         try
         {
+            startPromise.set_value();
             threadProcedure(stopToken);
         }
         catch (...)
@@ -275,7 +263,7 @@ protected:
         }
     }
     
-    inline void setThreadName()
+    inline void setThreadName() noexcept
     {
 #if !defined(__APPLE__)
         if (!threadName.empty())
@@ -285,7 +273,7 @@ protected:
             auto threadId = GetThreadId(threadHandle);
             // taken from https://docs.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2008/xcb2z8hs(v=vs.90)
             const DWORD MS_VC_EXCEPTION = 0x406D1388;
-#pragma pack(push,8)
+#       pragma pack(push,8)
             typedef struct tagTHREADNAME_INFO
             {
                 DWORD dwType; // Must be 0x1000.
@@ -293,7 +281,7 @@ protected:
                 DWORD dwThreadID; // Thread ID (-1=caller thread).
                 DWORD dwFlags; // Reserved for future use, must be zero.
             } THREADNAME_INFO;
-#pragma pack(pop)
+#       pragma pack(pop)
             THREADNAME_INFO Info;
             Info.dwType = 0x1000;
             Info.szName = threadName.c_str();
@@ -319,11 +307,11 @@ private:
     {
     public:
         virtual ~CallableContainerBase() = default;
-        virtual void call(const StopToken&) = 0;
+        virtual void call(const StopToken&) const = 0;
     };
     
     template<class TFn, class ...TArgs>
-    class CallableContainer : public CallableContainerBase
+    class CallableContainer final : public CallableContainerBase
     {
     public:
         explicit CallableContainer(TFn&& initFn, TArgs&&... initArgs)
@@ -331,7 +319,7 @@ private:
             , args(std::make_tuple<TArgs&&...>(std::forward<TArgs>(initArgs)...))
         {}
         
-        void call(const StopToken& stopToken) override
+        void call(const StopToken& stopToken) const override
         {
             callSpec<TFn>(stopToken, std::index_sequence_for<TArgs...>());
         }
@@ -344,7 +332,7 @@ private:
         inline
         typename std::enable_if_t<
             std::is_invocable<T, StopToken, TArgs...>::value,
-            void> callSpec(const StopToken& stopToken, std::index_sequence<Is...>)
+            void> callSpec(const StopToken& stopToken, std::index_sequence<Is...>) const
         {
             std::invoke(fn, stopToken, std::get<Is>(args)...);
         }
@@ -353,32 +341,32 @@ private:
         inline
         typename std::enable_if_t<
             !std::is_invocable<T, StopToken, TArgs...>::value,
-            void> callSpec(const StopToken&, std::index_sequence<Is...>)
+            void> callSpec(const StopToken&, std::index_sequence<Is...>) const
         {
             std::invoke(fn, std::get<Is>(args)...);
         }
     };
     
-    class ThreadProcedure
+    class ThreadProcedure final
     {
     public:
         ThreadProcedure() = default;
         
         template<class TFn, class ...TArgs>
         explicit ThreadProcedure(TFn&& fn, TArgs&&... args)
-            : threadProcedure(std::make_unique<CallableContainer<TFn, TArgs...>>(std::forward<TFn>(fn), std::forward<TArgs>(args)...))
+            : callableObject(std::make_unique<CallableContainer<TFn, TArgs...>>(std::forward<TFn>(fn), std::forward<TArgs>(args)...))
         {}
         
         inline void operator()(const StopToken& stopToken) const
         {
-            if (threadProcedure)
+            if (callableObject)
             {
-                threadProcedure->call(stopToken);
+                callableObject->call(stopToken);
             }
         }
         
     private:
-        std::unique_ptr<CallableContainerBase> threadProcedure;
+        std::unique_ptr<CallableContainerBase> callableObject;
     };
     
     std::atomic_bool isStarted { false };
@@ -391,7 +379,7 @@ private:
 };
 
 /// @brief Class representing a currently executing thread
-class ThisThread : public Thread
+class ThisThread final : public Thread
 {
 public:
     /// @brief set a thread procedure to use on this thread with or without StopToken

@@ -95,7 +95,7 @@ public:
     TaskQueue& operator=(const TaskQueue&) = delete;
     TaskQueue(TaskQueue&&) = delete;
     TaskQueue& operator=(TaskQueue&&) = delete;
-    ~TaskQueue()
+    virtual ~TaskQueue()
     {
         setAcceptsTasks(false);
         releaseSubQueues();
@@ -590,27 +590,26 @@ private:
 class SerialTaskQueue : public TaskQueue
 {
 public:
-    SerialTaskQueue()
+    SerialTaskQueue(const std::string& initQueueName)
         : TaskQueue([this](){
             queueWait.notify_one();
         })
-        , localThread("gusc::Threads::SerialTaskQueue", [this](const Thread::StopToken& token) {
-            runLoop(token);
-        })
+        , localThread(initQueueName, std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
         , thread(localThread)
     {
         thread.start();
         setThreadId(thread.getId());
     }
+    SerialTaskQueue()
+        : SerialTaskQueue("gusc::Threads::SerialTaskQueue")
+    {}
     SerialTaskQueue(ThisThread& initThread)
         : TaskQueue([this](){
             queueWait.notify_one();
         })
         , thread(initThread)
     {
-        initThread.setThreadProcedure([this](const Thread::StopToken& token) {
-            runLoop(token);
-        });
+        initThread.setThreadProcedure(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1));
         setThreadId(thread.getId());
     }
     ~SerialTaskQueue()

@@ -35,7 +35,7 @@ Library provides an `std::thread` wrapper with:
 
 `Thread` methods:
 
-* `Thread(TFunction&&, TArgs&&...)` - constructor accepting any kind of callable objects and additional arguments (there is a special case for function that accepts `[const ]Thread::StopToken[&]` as it's first argument)
+* `Thread(const std::string& threadName, TFunction&&, TArgs&&...)` - constructor accepting any kind of callable objects and additional arguments (there is a special case for function that accepts `[const ]Thread::StopToken[&]` as it's first argument)
 * `Thread::StartToken& start()` - start running the thread, returns a start token which can be used to wait for the thread procedure to actually start
 * `void stop()` - signal the thread to stop - this will signal the `Thread::StopToken` which you can then check on your thread procedure via `Thread::StopToken::getIsStopping()` method
 * `void join()` - join the thread if it has started and is joinable
@@ -114,6 +114,7 @@ Utility methods:
 
 The implementation of serial task queue is based on `TaskQueue` with serial run-loop logic.
 
+* `SerialTaskQueue(const std::string& queueName)` - construct a new serial task queue
 * `SerialTaskQueue(ThisThread& initThread)` - special constructor to place serial task queue on `ThisThread`
 
 ### ParallelTaskQueue class
