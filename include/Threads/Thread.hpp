@@ -18,18 +18,10 @@
 #   include <pthread.h>
 #endif
 
+#include "private/Utilities.hpp"
+
 namespace gusc
 {
-
-template<class TA, class TB>
-using IsSameType = std::is_same<
-    typename std::decay<
-        typename std::remove_cv<
-            typename std::remove_reference<TA>::type
-        >::type
-    >::type,
-    TB
->;
 
 namespace Threads
 {
