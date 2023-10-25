@@ -114,6 +114,7 @@ Utility methods:
 
 The implementation of serial task queue is based on `TaskQueue` with serial run-loop logic.
 
+* `SerialTaskQueue(const std::string& queueName)` - construct a new serial task queue
 * `SerialTaskQueue(ThisThread& initThread)` - special constructor to place serial task queue on `ThisThread`
 
 ### ParallelTaskQueue class
