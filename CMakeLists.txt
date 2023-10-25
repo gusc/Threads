@@ -11,6 +11,7 @@ set(SOURCES
     "include/Threads/ThreadPool.hpp"
     "include/Threads/private/Utilities.hpp"
     "include/Threads/private/LockedReference.hpp"
+    "include/Threads/private/ThreadStructures.hpp"
 )
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.19.0")
