@@ -10,6 +10,7 @@
 #define GUSC_TASKQUEUE_HPP
 
 #include "Thread.hpp"
+#include "ThreadPool.hpp"
 #include <set>
 #include <mutex>
 #include <utility>
@@ -243,7 +244,7 @@ public:
     }
     
     /// @brief Check if we are on caller is on the same thread as the task queue
-    inline bool getIsSameThread() const noexcept
+    virtual inline bool getIsSameThread() const noexcept
     {
         return threadId == std::this_thread::get_id();
     }
@@ -627,6 +628,90 @@ private:
     std::condition_variable queueWait;
     Thread localThread;
     Thread& thread;
+    
+    inline void runLoop(const Thread::StopToken& stopToken)
+    {
+        while (!stopToken.getIsStopping())
+        {
+            std::unique_lock<decltype(waitMutex)> lock(waitMutex);
+            // Move delayed tasks to main queue
+            const auto timeNow = std::chrono::steady_clock::now();
+            auto nextTaskTime = enqueueDelayedTasks(timeNow);
+            auto nextTask = acquireNextTask();
+            if (nextTask)
+            {
+                try
+                {
+                    nextTask->execute();
+                }
+                catch (...)
+                {
+                    // We can't do nothing as nobody is listening, but we don't want the thread to explode
+                }
+            }
+            else if (nextTaskTime != timeNow)
+            {
+                // There are no tasks to process, but delayedQueue had some tasks, we can wait till delay expires
+                queueWait.wait_until(lock, nextTaskTime);
+            }
+            else if (getAcceptsTasks())
+            {
+                // We wait for a new task to be pushed on any of the queues
+                queueWait.wait(lock);
+            }
+            clearDeadSubQueues();
+        }
+        setAcceptsTasks(false);
+        runLeftovers();
+    }
+    
+    inline void runLeftovers()
+    {
+        /// @note Delayed tasks are implicitly canceled by this point as their deadlines hadn't arrived
+        // Process any leftover tasks
+        while (auto next = acquireNextTask())
+        {
+            next->execute();
+        }
+    }
+};
+
+/// @brief a class representing a task queue that's running concurently on a thread pool
+class ParallelTaskQueue : public TaskQueue
+{
+public:
+    ParallelTaskQueue(const std::string& initQueueName, std::size_t initQueueCount)
+        : TaskQueue([this](){
+            queueWait.notify_one();
+        })
+        , threadPool(initQueueName, initQueueCount, std::bind(&ParallelTaskQueue::runLoop, this, std::placeholders::_1))
+    {
+        threadPool.start();
+    }
+    ParallelTaskQueue(std::size_t initQueueCount)
+        : ParallelTaskQueue("gusc::Threads::ParallelTaskQueue", initQueueCount)
+    {}
+    ~ParallelTaskQueue()
+    {
+        setAcceptsTasks(false);
+        if (threadPool.getIsStarted())
+        {
+            threadPool.stop();
+        }
+        queueWait.notify_all();
+    }
+    
+    /// @brief Check if we are on caller is on the same thread as the task queue
+    inline bool getIsSameThread() const noexcept override
+    {
+        // This helps optinmize tasks that can be run immediately
+        return threadPool.getIsThreadIdInPool(std::this_thread::get_id());
+    }
+    
+private:
+    std::mutex waitMutex;
+    std::condition_variable queueWait;
+    ThreadPool threadPool;
     
     inline void runLoop(const Thread::StopToken& stopToken)
     {

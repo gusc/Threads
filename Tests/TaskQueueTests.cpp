@@ -118,24 +118,33 @@ void runTaskQueueTests()
     
     gusc::Threads::SerialTaskQueue t1;
     gusc::Threads::SerialTaskQueue t2{tt};
+    gusc::Threads::ParallelTaskQueue t3("parallel", 4);
 
     // Test regular sends
     
     af1();
     t1.send(&af1);
     t2.send(&af1);
+    t3.send(&af1);
+    t3.send(&af1);
     
     al1();
     t1.send(al1);
     t2.send(al1);
+    t3.send(al1);
+    t3.send(al1);
     
     al2();
     t1.send(al2);
     t2.send(al2);
+    t3.send(al2);
+    t3.send(al2);
     
     al3();
     t1.send(al3);
     t2.send(al3);
+    t3.send(al3);
+    t3.send(al3);
     
     al4();
     // A lambda stored in a variable will be passed as reference which
@@ -144,22 +153,32 @@ void runTaskQueueTests()
     // you are sure the reference will outlive the task queue!)
     t1.send(std::ref(al4));
     t2.send(std::ref(al4));
+    t3.send(std::ref(al4));
+    t3.send(std::ref(al4));
     
     sf1();
     t1.send(&sf1);
     t2.send(&sf1);
+    t3.send(&sf1);
+    t3.send(&sf1);
     
     sl1();
     t1.send(sl1);
     t2.send(sl1);
+    t3.send(sl1);
+    t3.send(sl1);
     
     sl2();
     t1.send(sl2);
     t2.send(sl2);
+    t3.send(sl2);
+    t3.send(sl2);
     
     sl3();
     t1.send(sl3);
     t2.send(sl3);
+    t3.send(sl3);
+    t3.send(sl3);
     
     sl4();
     // A lambda stored in a variable will be passed as reference which
@@ -168,24 +187,32 @@ void runTaskQueueTests()
     // you are sure the reference will outlive the task queue!)
     t1.send(std::ref(sl4));
     t2.send(std::ref(sl4));
+    t3.send(std::ref(sl4));
+    t3.send(std::ref(sl4));
     
     {
         s1 cb;
         cb();
         t1.send(cb);
         t2.send(cb);
+        t3.send(cb);
+        t3.send(cb);
     }
     {
         const s1 cb;
         cb();
         t1.send(cb);
         t2.send(cb);
+        t3.send(cb);
+        t3.send(cb);
     }
     {
         // Temporary struct
         tlog << "Temporary s1";
         t1.send(s1{});
         t2.send(s1{});
+        t3.send(s1{});
+        t3.send(s1{});
     }
     
     {
@@ -193,17 +220,23 @@ void runTaskQueueTests()
         o.f1();
         t1.send(std::bind(&c1::f1, &o));
         t2.send(std::bind(&c1::f1, &o));
+        t3.send(std::bind(&c1::f1, &o));
+        t3.send(std::bind(&c1::f1, &o));
     }
     {
         c1 o;
         o.f2();
         t1.send(std::bind(&c1::f2, &o));
         t2.send(std::bind(&c1::f2, &o));
+        t3.send(std::bind(&c1::f2, &o));
+        t3.send(std::bind(&c1::f2, &o));
     }
     {
         c1::f3();
         t1.send(&c1::f3);
         t2.send(&c1::f3);
+        t3.send(&c1::f3);
+        t3.send(&c1::f3);
     }
     
     {
@@ -214,6 +247,8 @@ void runTaskQueueTests()
         localLambda();
         t1.send(localLambda);
         t2.send(localLambda);
+        t3.send(localLambda);
+        t3.send(localLambda);
     }
     {
         tlog << "Anonymous lambda";
@@ -221,6 +256,12 @@ void runTaskQueueTests()
             tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
         });
         t2.send([](){
+            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
+        });
+        t3.send([](){
+            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
+        });
+        t3.send([](){
             tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
         });
     }
@@ -234,6 +275,14 @@ void runTaskQueueTests()
         t2.send([m=std::move(movable_data2)](){
             tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X: " + std::to_string(m->size());
         });
+        auto movable_data3 = std::make_unique<std::vector<int>>(10, 0);
+        t3.send([m=std::move(movable_data3)](){
+            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X: " + std::to_string(m->size());
+        });
+        auto movable_data4 = std::make_unique<std::vector<int>>(10, 0);
+        t3.send([m=std::move(movable_data4)](){
+            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X: " + std::to_string(m->size());
+        });
     }
     
     // Test delayed tasks
@@ -245,6 +294,14 @@ void runTaskQueueTests()
         tlog << "Delayed message on thread ID: " + tidToStr(std::this_thread::get_id());
         tlog.flush();
     }, 2s);
+    t3.sendDelayed([](){
+        tlog << "Delayed message on thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog.flush();
+    }, 1s);
+    t3.sendDelayed([](){
+        tlog << "Delayed message on thread ID: " + tidToStr(std::this_thread::get_id());
+        tlog.flush();
+    }, 2s);
     
     std::this_thread::sleep_for(2.5s);
     
@@ -252,6 +309,10 @@ void runTaskQueueTests()
     try
     {
         t1.sendWait([](){
+            tlog << "Exception lambda thread ID: " + tidToStr(std::this_thread::get_id());
+            throw std::runtime_error("Oops");
+        });
+        t3.sendWait([](){
             tlog << "Exception lambda thread ID: " + tidToStr(std::this_thread::get_id());
             throw std::runtime_error("Oops");
         });
@@ -268,6 +329,12 @@ void runTaskQueueTests()
     t2.sendWait([](){
         tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
     });
+    t3.sendWait([](){
+        tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+    });
+    t3.sendWait([](){
+        tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+    });
     auto f1 = t1.sendAsync<int>([&]() -> int {
         // Try to do a blocking call from the same thread
         t1.sendWait([](){
@@ -278,6 +345,16 @@ void runTaskQueueTests()
     auto f2 = t2.sendAsync<int>([]() -> int {
         return 20;
     });
+    auto f3 = t3.sendAsync<int>([&]() -> int {
+        // Try to do a blocking call from the same thread
+        t3.sendWait([](){
+            tlog << "Sub blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        });
+        return 10;
+    });
+    auto f4 = t3.sendAsync<int>([]() -> int {
+        return 20;
+    });
     auto res1 = t1.sendSync<int>([&]() -> int {
         // Try to do a blocking call from the same thread
         t1.sendWait([](){
@@ -286,6 +363,16 @@ void runTaskQueueTests()
         return 1;
     });
     auto res2 = t2.sendSync<int>([]() -> int {
+        return 2;
+    });
+    auto res3 = t3.sendSync<int>([&]() -> int {
+        // Try to do a blocking call from the same thread
+        t3.sendWait([](){
+            tlog << "Sub blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        });
+        return 1;
+    });
+    auto res4 = t3.sendSync<int>([]() -> int {
         return 2;
     });
     tlog << "Sync and async results" + std::to_string(f1.getValue()) + std::to_string(f2.getValue()) + std::to_string(res1) + std::to_string(res2);

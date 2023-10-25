@@ -105,6 +105,23 @@ public:
     {
         return threads.size();
     }
+    
+    inline bool getIsStarted() const noexcept
+    {
+        return isStarted;
+    }
+    
+    inline bool getIsThreadIdInPool(std::thread::id threadId) const noexcept
+    {
+        for (auto& t : threads)
+        {
+            if (t->getId() == threadId)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
 private:
     #include "private/ThreadStructures.hpp"
