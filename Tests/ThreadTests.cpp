@@ -649,6 +649,9 @@ void runThreadTests()
         auto tp = gusc::Threads::ThreadPool(2, [&](const gusc::Threads::Thread::StopToken& token){
             tlog << "Running on a thread pool thread ID: " + tidToStr(std::this_thread::get_id());
         });
+        tp.start();
+        std::this_thread::sleep_for(200ms);
+        tp.stop();
     }
     
     // Test start/stop
@@ -657,9 +660,11 @@ void runThreadTests()
             tlog << "Starting thread ID: " + tidToStr(std::this_thread::get_id());
         });
         t.start();
+        std::this_thread::sleep_for(200ms);
         t.stop();
         t.join();
         t.start();
+        std::this_thread::sleep_for(200ms);
         t.stop();
         t.join();
     }
