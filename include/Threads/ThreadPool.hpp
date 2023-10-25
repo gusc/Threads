@@ -51,11 +51,17 @@ public:
         }
         if (newSize > threads.size())
         {
-            const auto initSize = threads.size() - 1;
+            // Append new threads
+            const auto initSize = threads.size();
             for (std::size_t i = initSize; i < newSize; ++i)
             {
                 threads.emplace_back(std::make_unique<Thread>(threadPoolName + "[" + std::to_string(i) + "]", threadProcedure));
             }
+        }
+        else if (newSize < threads.size())
+        {
+            // Remove threads from the end
+            threads.erase(threads.end() - (threads.size() - newSize), threads.end());
         }
     }
     
@@ -95,7 +101,7 @@ public:
         isStarted = false;
     }
     
-    inline std::size_t getConcurency() const noexcept
+    inline std::size_t getSize() const noexcept
     {
         return threads.size();
     }

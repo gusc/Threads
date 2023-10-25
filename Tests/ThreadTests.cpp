@@ -652,6 +652,16 @@ void runThreadTests()
         tp.start();
         std::this_thread::sleep_for(200ms);
         tp.stop();
+        tlog << "Increase thread pool";
+        tp.resize(10);
+        tp.start();
+        std::this_thread::sleep_for(200ms);
+        tp.stop();
+        tlog << "Decrease thread pool";
+        tp.resize(5);
+        tp.start();
+        std::this_thread::sleep_for(200ms);
+        tp.stop();
     }
     
     // Test start/stop
