@@ -10,7 +10,8 @@
 #   include <Windows.h>
 #endif
 
-#include "ThreadTests.hpp"
+#include <gtest/gtest.h>
+
 #include "Utilities.hpp"
 #include "Threads/Thread.hpp"
 #include "Threads/ThreadPool.hpp"
@@ -271,7 +272,7 @@ public:
     };
 };
 
-void runThreadTests()
+TEST(ThreadTests, Thread)
 {
     tlog << "========================";
     tlog << "Thread Tests";

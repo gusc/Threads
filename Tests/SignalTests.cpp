@@ -10,7 +10,8 @@
 #   include <Windows.h>
 #endif
 
-#include "SignalTests.hpp"
+#include <gtest/gtest.h>
+
 #include "Utilities.hpp"
 #include "Threads/Thread.hpp"
 #include "Threads/Signal.hpp"
@@ -117,7 +118,7 @@ static const auto objectLambda = [](const Object& o){
    slog << "Object lambda thread ID: " + tidToStr(std::this_thread::get_id()) + ", " + o.getVal();
 };
 
-void runSignalTests()
+TEST(ThreadTests, Signal)
 {
     slog << "Signal Tests";
     

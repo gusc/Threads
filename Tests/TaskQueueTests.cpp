@@ -10,7 +10,8 @@
 #   include <Windows.h>
 #endif
 
-#include "TaskQueueTests.hpp"
+#include <gtest/gtest.h>
+
 #include "Utilities.hpp"
 #include "Threads/TaskQueue.hpp"
 
@@ -107,7 +108,7 @@ public:
     }
 };
 
-void runTaskQueueTests()
+TEST(ThreadTests, TaskQueue)
 {
     tlog << "========================";
     tlog << "Task Queue Tests";
