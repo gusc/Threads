@@ -238,6 +238,7 @@ TEST_F(ParallelTaskQueueTest, SendAsync)
         auto it = std::find(ids.begin(), ids.end(), threadId);
         EXPECT_EQ(it, ids.end());
         ids.emplace_back(threadId);
+        mock.call();
         return 1;
     };
     auto f1 = queue.sendAsync<int>(std::ref(lambda));

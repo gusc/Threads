@@ -726,12 +726,14 @@ private:
             {
                 try
                 {
+                    lock.unlock();
                     nextTask->execute();
                 }
                 catch (...)
                 {
                     // We can't do nothing as nobody is listening, but we don't want the thread to explode
                 }
+                lock.lock();
             }
             else if (nextTaskTime != timeNow)
             {
