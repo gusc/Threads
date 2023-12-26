@@ -6,6 +6,7 @@ include(GoogleTest)
 set(SOURCES
 	"main.cpp"
 	"SignalTests.cpp"
+    "TaskQueueMocks.hpp"
     "TaskQueueTests.cpp"
 	"ThreadMocks.hpp"
 	"ThreadTests.cpp"
