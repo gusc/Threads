@@ -575,158 +575,21 @@ protected:
             }
         }
     }
-    
-private:
-    std::thread::id threadId { std::this_thread::get_id() };
-    std::atomic_bool acceptsTasks { true };
-    std::queue<std::shared_ptr<Task>> taskQueue;
-    std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
-    std::vector<std::weak_ptr<TaskQueue>> subQueues;
-    std::function<void(void)> queueNotifyCallback { nullptr };
-    std::recursive_mutex taskQueueMutex;
-    std::recursive_mutex queueNotifyMutex;
-};
 
-/// @brief a class representing a task queue that's running serially on a single thread
-class SerialTaskQueue : public TaskQueue
-{
-public:
-    SerialTaskQueue(const std::string& initQueueName)
-        : TaskQueue([this](){
-            queueWait.notify_one();
-        })
-        , localThread(initQueueName, std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
-        , thread(localThread)
-    {
-        thread.start();
-        setThreadId(thread.getId());
-    }
-    SerialTaskQueue()
-        : SerialTaskQueue("gusc::Threads::SerialTaskQueue")
-    {}
-    SerialTaskQueue(ThisThread& initThread)
-        : TaskQueue([this](){
-            queueWait.notify_one();
-        })
-        , thread(initThread)
-    {
-        initThread.setThreadProcedure(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1));
-        setThreadId(thread.getId());
-    }
-    ~SerialTaskQueue()
-    {
-        setAcceptsTasks(false);
-        if (thread.getIsStarted())
-        {
-            thread.stop();
-        }
-        queueWait.notify_all();
-    }
-    
-private:
-    std::mutex waitMutex;
-    std::condition_variable queueWait;
-    Thread localThread;
-    Thread& thread;
-    
     inline void runLoop(const Thread::StopToken& stopToken)
     {
         while (!stopToken.getIsStopping())
         {
-            std::unique_lock<decltype(waitMutex)> lock(waitMutex);
+            std::unique_lock lock { waitMutex };
             // Move delayed tasks to main queue
             const auto timeNow = std::chrono::steady_clock::now();
             auto nextTaskTime = enqueueDelayedTasks(timeNow);
             auto nextTask = acquireNextTask();
             if (nextTask)
             {
+                lock.unlock();
                 try
                 {
-                    nextTask->execute();
-                }
-                catch (...)
-                {
-                    // We can't do nothing as nobody is listening, but we don't want the thread to explode
-                }
-            }
-            else if (nextTaskTime != timeNow)
-            {
-                // There are no tasks to process, but delayedQueue had some tasks, we can wait till delay expires
-                queueWait.wait_until(lock, nextTaskTime);
-            }
-            else if (getAcceptsTasks())
-            {
-                // We wait for a new task to be pushed on any of the queues
-                queueWait.wait(lock);
-            }
-            clearDeadSubQueues();
-        }
-        setAcceptsTasks(false);
-        runLeftovers();
-    }
-    
-    inline void runLeftovers()
-    {
-        /// @note Delayed tasks are implicitly canceled by this point as their deadlines hadn't arrived
-        // Process any leftover tasks
-        while (auto next = acquireNextTask())
-        {
-            next->execute();
-        }
-    }
-};
-
-/// @brief a class representing a task queue that's running concurently on a thread pool
-class ParallelTaskQueue : public TaskQueue
-{
-public:
-    ParallelTaskQueue(const std::string& initQueueName, std::size_t initQueueCount)
-        : TaskQueue([this](){
-            queueWait.notify_one();
-        })
-        , threadPool(initQueueName, initQueueCount, std::bind(&ParallelTaskQueue::runLoop, this, std::placeholders::_1))
-    {
-        threadPool.start();
-    }
-    ParallelTaskQueue(std::size_t initQueueCount)
-        : ParallelTaskQueue("gusc::Threads::ParallelTaskQueue", initQueueCount)
-    {}
-    ~ParallelTaskQueue()
-    {
-        setAcceptsTasks(false);
-        if (threadPool.getIsStarted())
-        {
-            threadPool.stop();
-        }
-        queueWait.notify_all();
-    }
-    
-    /// @brief Check if we are on caller is on the same thread as the task queue
-    inline bool getIsSameThread() const noexcept override
-    {
-        // This helps optinmize tasks that can be run immediately
-        return threadPool.getIsThreadIdInPool(std::this_thread::get_id());
-    }
-    
-private:
-    std::mutex waitMutex;
-    std::condition_variable queueWait;
-    ThreadPool threadPool;
-    
-    inline void runLoop(const Thread::StopToken& stopToken)
-    {
-        while (!stopToken.getIsStopping())
-        {
-            std::unique_lock<decltype(waitMutex)> lock(waitMutex);
-            // Move delayed tasks to main queue
-            const auto timeNow = std::chrono::steady_clock::now();
-            auto nextTaskTime = enqueueDelayedTasks(timeNow);
-            auto nextTask = acquireNextTask();
-            if (nextTask)
-            {
-                try
-                {
-                    lock.unlock();
                     nextTask->execute();
                 }
                 catch (...)
@@ -750,16 +613,119 @@ private:
         setAcceptsTasks(false);
         runLeftovers();
     }
-    
+
     inline void runLeftovers()
     {
+        std::unique_lock lock { waitMutex };
         /// @note Delayed tasks are implicitly canceled by this point as their deadlines hadn't arrived
         // Process any leftover tasks
         while (auto next = acquireNextTask())
         {
+            lock.unlock();
             next->execute();
+            lock.lock();
         }
     }
+
+    inline void notifyQueueOne()
+    {
+        queueWait.notify_one();
+    }
+
+    inline void notifyQueueAll()
+    {
+        queueWait.notify_all();
+    }
+    
+private:
+    std::thread::id threadId { std::this_thread::get_id() };
+    std::atomic_bool acceptsTasks { true };
+    std::queue<std::shared_ptr<Task>> taskQueue;
+    std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
+    std::vector<std::weak_ptr<TaskQueue>> subQueues;
+    std::function<void(void)> queueNotifyCallback { nullptr };
+    std::recursive_mutex taskQueueMutex;
+    std::recursive_mutex queueNotifyMutex;
+    std::mutex waitMutex;
+    std::condition_variable queueWait;
+
+};
+
+/// @brief a class representing a task queue that's running serially on a single thread
+class SerialTaskQueue : public TaskQueue
+{
+public:
+    SerialTaskQueue(const std::string& initQueueName)
+        : TaskQueue([this](){
+            notifyQueueOne();
+        })
+        , localThread(initQueueName, std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1))
+        , thread(localThread)
+    {
+        thread.start();
+        setThreadId(thread.getId());
+    }
+    SerialTaskQueue()
+        : SerialTaskQueue("gusc::Threads::SerialTaskQueue")
+    {}
+    SerialTaskQueue(ThisThread& initThread)
+        : TaskQueue([this](){
+            notifyQueueOne();
+        })
+        , thread(initThread)
+    {
+        initThread.setThreadProcedure(std::bind(&SerialTaskQueue::runLoop, this, std::placeholders::_1));
+        setThreadId(thread.getId());
+    }
+    ~SerialTaskQueue()
+    {
+        setAcceptsTasks(false);
+        if (thread.getIsStarted())
+        {
+            thread.stop();
+        }
+        notifyQueueAll();
+    }
+    
+private:
+    Thread localThread;
+    Thread& thread;
+};
+
+/// @brief a class representing a task queue that's running concurently on a thread pool
+class ParallelTaskQueue : public TaskQueue
+{
+public:
+    ParallelTaskQueue(const std::string& initQueueName, std::size_t initQueueCount)
+        : TaskQueue([this](){
+            notifyQueueOne();
+        })
+        , threadPool(initQueueName, initQueueCount, std::bind(&ParallelTaskQueue::runLoop, this, std::placeholders::_1))
+    {
+        threadPool.start();
+    }
+    ParallelTaskQueue(std::size_t initQueueCount)
+        : ParallelTaskQueue("gusc::Threads::ParallelTaskQueue", initQueueCount)
+    {}
+    ~ParallelTaskQueue()
+    {
+        setAcceptsTasks(false);
+        if (threadPool.getIsStarted())
+        {
+            threadPool.stop();
+        }
+        notifyQueueAll();
+    }
+    
+    /// @brief Check if we are on caller is on the same thread as the task queue
+    inline bool getIsSameThread() const noexcept override
+    {
+        // This helps optimize tasks that can be run immediately
+        return threadPool.getIsThreadIdInPool(std::this_thread::get_id());
+    }
+    
+private:
+    ThreadPool threadPool;
 };
 
 }
