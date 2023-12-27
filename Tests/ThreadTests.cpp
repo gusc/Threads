@@ -340,3 +340,87 @@ TEST(ThreadTests, ThreadStartStop)
 
     mock.setMock(nullptr);
 }
+
+TEST(ThreadTests, ThreadPriority)
+{
+    ThreadMock actualMock;
+    mock.setMock(&actualMock);
+    EXPECT_CALL(actualMock, call()).Times(4);
+
+    gusc::Threads::Thread t("Test", gusc::Threads::Thread::Priority::Default, [&](const gusc::Threads::Thread::StopToken& token){
+        mock.call();
+        int i = 0;
+        while (!token.getIsStopping())
+        {
+            ++i;
+        }
+#if defined(__APPLE__)
+        sched_param param;
+        auto policy = SCHED_RR;
+        pthread_getschedparam(pthread_self(), &policy, &param);
+        EXPECT_EQ(param.sched_priority, 31);
+#endif
+    });
+
+    gusc::Threads::Thread t2("Test", gusc::Threads::Thread::Priority::Low, [&](const gusc::Threads::Thread::StopToken& token){
+        mock.call();
+        int i = 0;
+        while (!token.getIsStopping())
+        {
+            ++i;
+        }
+#if defined(__APPLE__)
+        sched_param param;
+        auto policy = SCHED_RR;
+        pthread_getschedparam(pthread_self(), &policy, &param);
+        EXPECT_EQ(param.sched_priority, 31);
+#endif
+    });
+
+    gusc::Threads::Thread t3("Test", gusc::Threads::Thread::Priority::High, [&](const gusc::Threads::Thread::StopToken& token){
+        mock.call();
+        int i = 0;
+        while (!token.getIsStopping())
+        {
+            ++i;
+        }
+#if defined(__APPLE__)
+        sched_param param;
+        auto policy = SCHED_RR;
+        pthread_getschedparam(pthread_self(), &policy, &param);
+        EXPECT_EQ(param.sched_priority, 31);
+#endif
+    });
+
+    gusc::Threads::Thread t4("Test", gusc::Threads::Thread::Priority::RealTime, [&](const gusc::Threads::Thread::StopToken& token){
+        mock.call();
+        int i = 0;
+        while (!token.getIsStopping())
+        {
+            ++i;
+        }
+#if defined(__APPLE__)
+        sched_param param;
+        auto policy = SCHED_RR;
+        pthread_getschedparam(pthread_self(), &policy, &param);
+        // This should be 97, but unfortunately getschedparam does still return maximum of 31
+        EXPECT_EQ(param.sched_priority, 31);
+#endif
+    });
+
+    t.start();
+    t2.start();
+    t3.start();
+    t4.start();
+    std::this_thread::sleep_for(50ms);
+    t.stop();
+    t2.stop();
+    t3.stop();
+    t4.stop();
+    t.join();
+    t2.join();
+    t3.join();
+    t4.join();
+
+    mock.setMock(nullptr);
+}

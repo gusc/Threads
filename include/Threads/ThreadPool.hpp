@@ -21,26 +21,40 @@ class ThreadPool final
 {
 public:
     ThreadPool() = default;
-    // Thread("name", function, args...)
+    // Thread("name", size, priority function, args...)
     template <class TFn, class ...TArgs>
-    ThreadPool(const std::string& initThreadPoolName, std::size_t initThreadPoolSize, TFn&& fn, TArgs&&... args)
+    ThreadPool(const std::string& initThreadPoolName, std::size_t initThreadPoolSize, Thread::Priority initThreadPriority, TFn&& fn, TArgs&&... args)
         : threadPoolName(initThreadPoolName)
         , threadProcedure(std::forward<TFn>(fn), std::forward<TArgs>(args)...)
+        , threadPriority(initThreadPriority)
     {
         for (std::size_t i = 0; i < initThreadPoolSize; ++i)
         {
             threads.emplace_back(std::make_unique<Thread>(threadPoolName + "[" + std::to_string(i) + "]", threadProcedure));
         }
     }
-    // Thread(function, args...)
+    // Thread("name", size, function, args...)
     template <class TFn, class ...TArgs,
         class = typename std::enable_if<
-            !IsSameType<TFn, std::string>::value &&
-            !IsSameType<TFn, char*>::value
+            !IsSameType<TFn, Thread::Priority>::value
+        >::type
+    >
+    ThreadPool(const std::string& name, std::size_t size, TFn&& fn, TArgs&&... args)
+        : ThreadPool(name, size, Thread::Priority::Default, std::forward<TFn>(fn),  std::forward<TArgs>(args)...)
+    {}
+    // Thread(size, priority, function, args...)
+    template <class TFn, class ...TArgs>
+    ThreadPool(std::size_t size, Thread::Priority priority, TFn&& fn, TArgs&&... args)
+        : ThreadPool("gust::Threads::ThreadPool", size, priority, std::forward<TFn>(fn),  std::forward<TArgs>(args)...)
+    {}
+    // Thread(size, function, args...)
+    template <class TFn, class ...TArgs,
+        class = typename std::enable_if<
+            !IsSameType<TFn, Thread::Priority>::value
         >::type
     >
     explicit ThreadPool(std::size_t initThreadPoolSize, TFn&& fn, TArgs&&... args)
-        : ThreadPool("gust::Threads::ThreadPool", initThreadPoolSize, std::forward<TFn>(fn), std::forward<TArgs>(args)...)
+        : ThreadPool("gust::Threads::ThreadPool", initThreadPoolSize, Thread::Priority::Default, std::forward<TFn>(fn), std::forward<TArgs>(args)...)
     {}
     
     inline void resize(std::size_t newSize)
@@ -130,6 +144,7 @@ private:
     std::atomic_bool isStarted { false };
     std::string threadPoolName { "gust::Threads::ThreadPool" };
     ThreadProcedure threadProcedure;
+    Thread::Priority threadPriority { Thread::Priority::Default };
 };
 
 } // namespace gusc::Threads

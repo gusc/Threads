@@ -16,6 +16,11 @@
 
 #if !defined(_WIN32)
 #   include <pthread.h>
+#   if defined(__APPLE__)
+#       include <mach/mach_time.h>
+#       include <mach/thread_policy.h>
+#       include <mach/thread_act.h>
+#   endif
 #endif
 
 #include "private/Utilities.hpp"
@@ -30,6 +35,17 @@ namespace Threads
 class Thread
 {
 public:
+    /// @brief Thread priorities
+    /// Default - leave the default priority that is implementation and platform specific
+    /// RealTime - elevate priority to highest possible (real-time threads on macOS and iOS, THREAD_PRIORITY_TIME_CRITICAL on Windows)
+    enum class Priority
+    {
+        Default,
+        Low,
+        High,
+        RealTime
+    };
+
     /// @brief an object returned from Thread::start() method that informs when thread has fully initialized
     /// Use this token to pause caller thread until this thread has fully started
     class StartToken
@@ -93,21 +109,33 @@ public:
     };
 
     Thread() = default;
-    // Thread("name", function, args...)
+    // Thread("name", priority, function, args...)
     template <class TFn, class ...TArgs>
-    Thread(const std::string& initThreadName, TFn&& fn, TArgs&&... args)
+    Thread(const std::string& initThreadName, Priority initPriority, TFn&& fn, TArgs&&... args)
         : threadName(initThreadName)
         , threadProcedure(std::forward<TFn>(fn), std::forward<TArgs>(args)...)
+        , priority(initPriority)
+    {}
+    // Thread("name", function, args...)
+    template <class TFn, class ...TArgs>
+    Thread(const std::string& name, TFn&& fn, TArgs&&... args)
+        : Thread(name, Priority::Default, std::forward<TFn>(fn), std::forward<TArgs>(args)...)
+    {}
+    // Thread(priority, function, args...)
+    template <class TFn, class ...TArgs>
+    Thread(Priority priority, TFn&& fn, TArgs&&... args)
+        : Thread("gust::Threads::Thread", priority, std::forward<TFn>(fn), std::forward<TArgs>(args)...)
     {}
     // Thread(function, args...)
     template <class TFn, class ...TArgs,
         class = typename std::enable_if<
             !IsSameType<TFn, std::string>::value &&
-            !IsSameType<TFn, char*>::value
+            !IsSameType<TFn, char*>::value &&
+            !IsSameType<TFn, Priority>::value
         >::type
     >
     explicit Thread(TFn&& fn, TArgs&&... args)
-        : Thread("gust::Threads::Thread", std::forward<TFn>(fn), std::forward<TArgs>(args)...)
+        : Thread("gust::Threads::Thread", Priority::Default, std::forward<TFn>(fn), std::forward<TArgs>(args)...)
     {}
 
     Thread(const Thread&) = delete;
@@ -143,6 +171,7 @@ public:
                 thread.detach();
             }
             thread = std::thread{ &Thread::run, this };
+            setThreadPriority();
             setThreadName();
             return startToken;
         }
@@ -213,12 +242,8 @@ public:
 protected:
     inline void run() noexcept
     {
-#if defined(__APPLE__)
-        if (!threadName.empty())
-        {
-            pthread_setname_np(threadName.c_str());
-        }
-#endif
+        setThisThreadPriority();
+        setThisThreadName();
         startToken.isStarted = true;
         try
         {
@@ -262,45 +287,14 @@ protected:
             throw std::runtime_error("Can not change the runnable of the thread that has already started");
         }
     }
-    
-    inline void setThreadName() noexcept
-    {
-#if !defined(__APPLE__)
-        if (!threadName.empty())
-        {
-            auto threadHandle = thread.native_handle();
-#   if defined(_WIN32)
-            auto threadId = GetThreadId(threadHandle);
-            // taken from https://docs.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2008/xcb2z8hs(v=vs.90)
-            const DWORD MS_VC_EXCEPTION = 0x406D1388;
-#       pragma pack(push,8)
-            typedef struct tagTHREADNAME_INFO
-            {
-                DWORD dwType; // Must be 0x1000.
-                LPCSTR szName; // Pointer to name (in user addr space).
-                DWORD dwThreadID; // Thread ID (-1=caller thread).
-                DWORD dwFlags; // Reserved for future use, must be zero.
-            } THREADNAME_INFO;
-#       pragma pack(pop)
-            THREADNAME_INFO Info;
-            Info.dwType = 0x1000;
-            Info.szName = threadName.c_str();
-            Info.dwThreadID = threadId;
-            Info.dwFlags = 0;
-            __try
-            {
-                RaiseException(MS_VC_EXCEPTION, 0, sizeof(Info) / sizeof(ULONG_PTR), (ULONG_PTR*)&Info);
-            }
-            __except (EXCEPTION_EXECUTE_HANDLER)
-            {
-            }
-#   elif defined(__linux__)
-            pthread_setname_np(threadHandle, threadName.c_str());
-#   endif
-            // On Apple we can only set name of current thread (see run())
-        }
+
+#if defined(__APPLE__)
+#   include "private/ThreadApple.hpp"
+#elif defined(_WIN32)
+#   include "private/ThreadWindows.hpp"
+#else
+#   include "private/ThreadLinux.hpp"
 #endif
-    }
     
 private:
     #include "private/ThreadStructures.hpp"
@@ -311,6 +305,7 @@ private:
     StopToken stopToken;
     std::string threadName { "gust::Threads::Thread" };
     ThreadProcedure threadProcedure;
+    Priority priority { Priority::Default };
     std::thread thread;
 };
 
