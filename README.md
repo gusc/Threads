@@ -49,7 +49,7 @@ Library provides an `std::thread` wrapper with:
 
 Additionally library provides a `ThisThread` class to execute procedure in `Thread` context. This is intended to be used only on a main thread or any other current thread that was not started by `Thread` class to use in a similar manner as `Thread` objects.
 
-`ThisThread` extends from `Thread` and starts thread procedure when `start()` is called effectivelly blocking current thread until someone calls `stop()` and your thread procedure handles stopping signal.
+`ThisThread` extends from `Thread` and starts thread procedure when `start()` is called effectively blocking current thread until someone calls `stop()` and your thread procedure handles stopping signal.
 
 ### ThreadPool class
 
@@ -73,7 +73,7 @@ For actual real-world usage examples see [Examples directory](./Examples) and [T
 This library provides a task queue which allows posting more complex tasks on a thread that includes:
 
 * tasks that are simply run whenever thread becomes free
-* tasks that return a handle from which you can cancel, check if task has executed and even get an asychronous results
+* tasks that return a handle from which you can cancel, check if task has executed and even get an asynchronous results
 * tasks that can block current thread and wait until it's executed 
 
 `TaskQueue` is a base class for any style of queueing mechanism. The final implementation is `SerialTaskQueue` which runs on a single thread and processes tasks in-order (there is a `ParallelTaskQueue` planned that will use `ThreadPool` which is also WIP).
@@ -84,10 +84,10 @@ This library provides a task queue which allows posting more complex tasks on a 
 
 `TaskQueue` task methods:
 
-* `void send(const TCallable&)` - place a callabable object on the task queue
-* `TaskHandle sendDelayed(const TCallable&, const std::chrono:milliseconds&)` - place a callabable object on the message queue and execute it after set delay time has elapsed (this method also returns a `TaskHandle` object that allows to cancel the message while it's delay hasn't elapsed).
-* `TaskHandleWithResult<TReturn> sendAsync<TReturn>(const TCallable&)` - place a callabable object that can return value asynchronously on the task queue (this message return `TaskHandleWithResult<TReturn>` - similar to `TaskHandle`, but it can also be use to block current thread until the task has finished or exception has occured.
-* `TReturn sendSync<TReturn>(const TCallable&)` - place a callabable object that can return value synchronously on the task queue (this blocks calling thread until the callable finishes and returns)
+* `void send(const TCallable&)` - place a callable object on the task queue
+* `TaskHandle sendDelayed(const TCallable&, const std::chrono:milliseconds&)` - place a callable object on the message queue and execute it after set delay time has elapsed (this method also returns a `TaskHandle` object that allows to cancel the message while it's delay hasn't elapsed).
+* `TaskHandleWithResult<TReturn> sendAsync<TReturn>(const TCallable&)` - place a callable object that can return value asynchronously on the task queue (this message return `TaskHandleWithResult<TReturn>` - similar to `TaskHandle`, but it can also be use to block current thread until the task has finished or exception has occurred.
+* `TReturn sendSync<TReturn>(const TCallable&)` - place a callable object that can return value synchronously on the task queue (this blocks calling thread until the callable finishes and returns)
 * `void sendWait(const TCallable&)` - place a callable object on the task queue and block until it's executed queue
 * `void cancelAll()` - cancel all pending tasks
 
@@ -128,7 +128,7 @@ The implementation of serial task queue is based on `TaskQueue` with serial run-
 
 ### ParallelTaskQueue class
 
-The implementation of parallel task queue is based on `TaskQueue` with concurrent job-stealing run-loop logic runing on a `ThreadPool`.
+The implementation of parallel task queue is based on `TaskQueue` with concurrent job-stealing run-loop logic running on a `ThreadPool`.
 
 * `ParallelTaskQueue(const std::string& queueName, std::size_t queueCount)` - construct a new parallel task queue
 
@@ -140,9 +140,9 @@ For actual real-world usage examples see [Examples directory](./Examples) and [T
 
 Library provides a Qt-style signal-slot functionality, but with standard C++ only.
 
-Signals are means to emit data to multiple listeneres at once. All you have to do is to `connect()` to each signal with a target thread (`Thread*`) on which the callback should be executed and a callback function pointer itself.
+Signals are means to emit data to multiple listeners at once. All you have to do is to `connect()` to each signal with a target thread (`Thread*`) on which the callback should be executed and a callback function pointer itself.
 
-If the listener is on the same thread where signal was emited from it's called directly and all the data is passed as `const&`. Data is only copied when signal is emitted to a different thread, then the data is packed together with the callback and placed on that threads message queue for later processing.
+If the listener is on the same thread where signal was emitted from it's called directly and all the data is passed as `const&`. Data is only copied when signal is emitted to a different thread, then the data is packed together with the callback and placed on that threads message queue for later processing.
 
 ### Signal class
 
@@ -155,75 +155,10 @@ It's a templated class who's method signature depend on what arguments the signa
 * `bool disconnect(Thread*, const std::function<void(TArg...)>&)` - disconnect a listener from the signal (returns false if function/thread pair is not found or if function came from temporary object, like std::bind)
 * `bool disconnect(T*, const void(T::*)(TArg...))` - disconnect a listener member method of Thread class derivative from the signal (returns false if function/thread is not found in connection list)
 * `bool disconnect(const size_t)` - disconnect a listener from the signal by connection ID (returns false if ID not found in connection list)
-* `void emit(const TArg&...)` - emit the signal with data - this will call all the connected listeners on their respecitve affinity threads
+* `void emit(const TArg&...)` - emit the signal with data - this will call all the connected listeners on their respective affinity threads
 
 When disconnecting listeners from signals, for function objects, like ones returned by `std::bind` or lambdas, you should use connection ID's.
 
 ### Examples
 
-```c++
-
-class MyObject final
-{
-public:
-    MyObject()
-    {}
-    
-    public someMethod()
-    {
-        sigSimple.emit();
-        sigArgs.emit(1, 2);
-    }
-    
-    // Signal definition includes signal argument types
-    gusc::Threads::Signal<void> sigSimple;
-    gusc::Threads::Signal<int, int> sigArgs;
-};
-
-class MyObject2 final : gusc::Threads::Thread
-{
-public:
-    MyObject2(MyObject& initOther)
-        : Thread()
-    {
-        initOther.sigArgs.connect(this, &MyObject2::onArgs)
-    }
-    
-private:
-    void onArgs(int a, int b)
-    {
-        auto id = std::this_thread::get_id();
-        std::cout << "MyObject2::onArgs thread ID: " << id << "\n";
-    }    
-};
-
-int main(int argc, const char * argv[]) {
-    auto id = std::this_thread::get_id();
-    std::cout << "Main thread ID: " << id << "\n";
-
-    gusc::Threads::ThisThread mainThread;
-    gusc::Threads::Thread workerThread;
-    
-    MyObject my;
-    const auto connection1 = my.sigSimple.connect(&workerThread, [](){
-        std::cout << "lambda thread ID: " << id << "\n";
-    });
-    const auto connection2 = my.sigSimple.connect(&mainThread, [](){
-        std::cout << "lambda thread ID: " << id << "\n";
-    });
-    
-    MyObject2 myThread(my);
-    
-    my.someMethod(); // Emits the signals
-    
-    // We need to start our thread so that their signal listeners are executed
-    workerThread.start();
-    myThread.start(); 
-    mainThread.start(); // Blocks indefinitely
-    
-    my.sigSimple.disconnect(connection1);
-    my.sigSimple.disconnect(connection2);
-    return 0;
-}
-
-```
+For actual real-world usage examples see [Examples directory](./Examples) and [Tests directory](./Tests)
