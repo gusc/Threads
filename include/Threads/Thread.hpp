@@ -30,6 +30,17 @@ namespace Threads
 class Thread
 {
 public:
+    /// @brief Thread priorities
+    /// Default - leave the default priority that is implementation and platform specific
+    /// RealTime - elevate priority to highest possible (real-time threads on macOS and iOS, THREAD_PRIORITY_TIME_CRITICAL on Windows)
+    enum class Priority
+    {
+        Default,
+        Low,
+        High,
+        RealTime
+    };
+
     /// @brief an object returned from Thread::start() method that informs when thread has fully initialized
     /// Use this token to pause caller thread until this thread has fully started
     class StartToken
@@ -93,21 +104,33 @@ public:
     };
 
     Thread() = default;
-    // Thread("name", function, args...)
+    // Thread("name", priority, function, args...)
     template <class TFn, class ...TArgs>
-    Thread(const std::string& initThreadName, TFn&& fn, TArgs&&... args)
+    Thread(const std::string& initThreadName, Priority initPriority, TFn&& fn, TArgs&&... args)
         : threadName(initThreadName)
         , threadProcedure(std::forward<TFn>(fn), std::forward<TArgs>(args)...)
+        , priority(initPriority)
+    {}
+    // Thread("name", function, args...)
+    template <class TFn, class ...TArgs>
+    Thread(const std::string& name, TFn&& fn, TArgs&&... args)
+        : Thread(name, Priority::Default, std::forward<TFn>(fn), std::forward<TArgs>(args)...)
+    {}
+    // Thread(priority, function, args...)
+    template <class TFn, class ...TArgs>
+    Thread(Priority priority, TFn&& fn, TArgs&&... args)
+        : Thread("gust::Threads::Thread", priority, std::forward<TFn>(fn), std::forward<TArgs>(args)...)
     {}
     // Thread(function, args...)
     template <class TFn, class ...TArgs,
         class = typename std::enable_if<
             !IsSameType<TFn, std::string>::value &&
-            !IsSameType<TFn, char*>::value
+            !IsSameType<TFn, char*>::value &&
+            !IsSameType<TFn, Priority>::value
         >::type
     >
     explicit Thread(TFn&& fn, TArgs&&... args)
-        : Thread("gust::Threads::Thread", std::forward<TFn>(fn), std::forward<TArgs>(args)...)
+        : Thread("gust::Threads::Thread", Priority::Default, std::forward<TFn>(fn), std::forward<TArgs>(args)...)
     {}
 
     Thread(const Thread&) = delete;
@@ -311,6 +334,7 @@ private:
     StopToken stopToken;
     std::string threadName { "gust::Threads::Thread" };
     ThreadProcedure threadProcedure;
+    Priority priority { Priority::Default };
     std::thread thread;
 };
 
