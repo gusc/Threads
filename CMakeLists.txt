@@ -13,13 +13,15 @@ set(SOURCES
     "include/Threads/private/LockedReference.hpp"
     "include/Threads/private/ThreadStructures.hpp"
 )
+list(SORT SOURCES)
+source_group(TREE "${CMAKE_CURRENT_LIST_DIR}/include/Threads" FILES ${SOURCES})
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.19.0")
-	add_library(${PROJECT_NAME} INTERFACE ${SOURCES})
+	add_library(${PROJECT_NAME} INTERFACE)
 else()
 	add_library(${PROJECT_NAME} INTERFACE)
 endif()
-
+target_sources(${PROJECT_NAME} PUBLIC ${SOURCES})
 target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
 target_include_directories(${PROJECT_NAME} INTERFACE
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/>

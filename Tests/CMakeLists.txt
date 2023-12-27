@@ -13,8 +13,11 @@ set(SOURCES
 	"ThreadTests.cpp"
 	"Utilities.hpp"
 )
+list(SORT SOURCES)
+source_group(TREE "${CMAKE_CURRENT_LIST_DIR}" FILES ${SOURCES})
 
-add_executable(${PROJECT_NAME} ${SOURCES})
+add_executable(${PROJECT_NAME})
+target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/../include/)
 target_link_libraries(${PROJECT_NAME} PRIVATE gtest gmock)
