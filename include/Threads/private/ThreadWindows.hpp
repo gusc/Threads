@@ -42,3 +42,23 @@ inline void setThisThreadName() noexcept
 {
 }
 
+inline void setThreadPriority() noexcept
+{
+    auto threadHandle = thread.native_handle();
+    if (priority == Priority::RealTime)
+    {
+        SetThreadPriority(threadHandle, THREAD_PRIORITY_TIME_CRITICAL);
+    }
+    else if (priority == Priority::High)
+    {
+        SetThreadPriority(threadHandle, THREAD_PRIORITY_HIGHEST);
+    }
+    else if (priority == Priority::Low)
+    {
+        SetThreadPriority(threadHandle, THREAD_PRIORITY_LOWEST);
+    }
+}
+
+inline void setThisThreadPriority() noexcept
+{
+}

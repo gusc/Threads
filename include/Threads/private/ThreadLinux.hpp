@@ -19,3 +19,44 @@ inline void setThisThreadName() noexcept
 {
 }
 
+inline void setThreadPriority() noexcept
+{
+    auto threadHandle = thread.native_handle();
+    auto policy = SCHED_FIFO;
+    auto priority_min = sched_get_priority_min(policy);
+    auto priority_max = sched_get_priority_max(policy);
+    if (priority == Priority::RealTime)
+    {
+        sched_param param;
+        param.sched_priority=priority_max;
+        auto status = pthread_setschedparam(threadHandle, policy, &param);
+        if (status != 0)
+        {
+            // TODO: Handle error
+        }
+    }
+    else if (priority == Priority::High)
+    {
+        sched_param param;
+        param.sched_priority=priority_max - 1;
+        auto status = pthread_setschedparam(threadHandle, policy, &param);
+        if (status != 0)
+        {
+            // TODO: Handle error
+        }
+    }
+    else if (priority == Priority::Low)
+    {
+        sched_param param;
+        param.sched_priority=priority_min + 1;
+        auto status = pthread_setschedparam(threadHandle, policy, &param);
+        if (status != 0)
+        {
+            // TODO: Handle error
+        }
+    }
+}
+
+inline void setThisThreadPriority() noexcept
+{
+}

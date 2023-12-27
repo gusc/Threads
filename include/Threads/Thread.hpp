@@ -16,6 +16,11 @@
 
 #if !defined(_WIN32)
 #   include <pthread.h>
+#   if defined(__APPLE__)
+#       include <mach/mach_time.h>
+#       include <mach/thread_policy.h>
+#       include <mach/thread_act.h>
+#   endif
 #endif
 
 #include "private/Utilities.hpp"
@@ -166,6 +171,7 @@ public:
                 thread.detach();
             }
             thread = std::thread{ &Thread::run, this };
+            setThreadPriority();
             setThreadName();
             return startToken;
         }
@@ -236,6 +242,7 @@ public:
 protected:
     inline void run() noexcept
     {
+        setThisThreadPriority();
         setThisThreadName();
         startToken.isStarted = true;
         try
