@@ -11,7 +11,10 @@ set(SOURCES
     "include/Threads/ThreadPool.hpp"
     "include/Threads/private/Utilities.hpp"
     "include/Threads/private/LockedReference.hpp"
+    "include/Threads/private/ThreadApple.hpp"
+    "include/Threads/private/ThreadLinux.hpp"
     "include/Threads/private/ThreadStructures.hpp"
+    "include/Threads/private/ThreadWindows.hpp"
 )
 list(SORT SOURCES)
 source_group(TREE "${CMAKE_CURRENT_LIST_DIR}/include/Threads" FILES ${SOURCES})
