@@ -29,11 +29,13 @@ class TaskQueueMockWrapper
 public:
     void setMock(TaskQueueMock* newMock)
     {
+        std::lock_guard lock { mutex };
         actualMock = newMock;
     }
 
     void call()
     {
+        std::lock_guard lock { mutex };
         if (actualMock)
         {
             actualMock->call();
@@ -42,6 +44,7 @@ public:
 
     void noCall()
     {
+        std::lock_guard lock { mutex };
         if (actualMock)
         {
             actualMock->noCall();
@@ -50,12 +53,14 @@ public:
 
     void recover()
     {
+        std::lock_guard lock { mutex };
         if (actualMock)
         {
             actualMock->recover();
         }
     }
 private:
+    std::mutex mutex;
     TaskQueueMock* actualMock;
 };
 

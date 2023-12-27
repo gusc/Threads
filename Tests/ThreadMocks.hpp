@@ -27,17 +27,20 @@ class ThreadMockWrapper
 public:
     void setMock(ThreadMock* newMock)
     {
+        std::lock_guard lock { mutex };
         actualMock = newMock;
     }
 
     void call()
     {
+        std::lock_guard lock { mutex };
         if (actualMock)
         {
             actualMock->call();
         }
     }
 private:
+    std::mutex mutex;
     ThreadMock* actualMock;
 };
 
