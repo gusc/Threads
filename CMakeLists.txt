@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.18)
 project(Threads VERSION 1.0.0 LANGUAGES CXX)
 
-option(Threads_BuildTests "Build the unit tests." ON)
-option(Threads_BuildExamples "Build the examples." ON)
+option(Threads_BuildTests "Build the unit tests." OFF)
+option(Threads_BuildExamples "Build the examples." OFF)
 
 set(SOURCES
 	"include/Threads/Signal.hpp"
@@ -11,6 +11,7 @@ set(SOURCES
     "include/Threads/ThreadPool.hpp"
     "include/Threads/private/Utilities.hpp"
     "include/Threads/private/LockedReference.hpp"
+    "include/Threads/private/ThreadStructures.hpp"
 )
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.19.0")
@@ -27,6 +28,9 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 
 include(CTest)
 if(Threads_BuildTests)
+    if(NOT TARGET gtest)
+        message(FATAL_ERROR "You must provide Google Test library to build unittests")
+    endif()
     add_subdirectory(Tests)
 endif()
 if(Threads_BuildExamples)

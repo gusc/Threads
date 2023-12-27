@@ -303,71 +303,7 @@ protected:
     }
     
 private:
-    class CallableContainerBase
-    {
-    public:
-        virtual ~CallableContainerBase() = default;
-        virtual void call(const StopToken&) const = 0;
-    };
-    
-    template<class TFn, class ...TArgs>
-    class CallableContainer final : public CallableContainerBase
-    {
-    public:
-        explicit CallableContainer(TFn&& initFn, TArgs&&... initArgs)
-            : fn(std::forward<TFn>(initFn))
-            , args(std::make_tuple<TArgs&&...>(std::forward<TArgs>(initArgs)...))
-        {}
-        
-        void call(const StopToken& stopToken) const override
-        {
-            callSpec<TFn>(stopToken, std::index_sequence_for<TArgs...>());
-        }
-        
-    private:
-        TFn fn;
-        std::tuple<TArgs...> args;
-        
-        template<typename T, std::size_t... Is>
-        inline
-        typename std::enable_if_t<
-            std::is_invocable<T, StopToken, TArgs...>::value,
-            void> callSpec(const StopToken& stopToken, std::index_sequence<Is...>) const
-        {
-            std::invoke(fn, stopToken, std::get<Is>(args)...);
-        }
-        
-        template<typename T, std::size_t... Is>
-        inline
-        typename std::enable_if_t<
-            !std::is_invocable<T, StopToken, TArgs...>::value,
-            void> callSpec(const StopToken&, std::index_sequence<Is...>) const
-        {
-            std::invoke(fn, std::get<Is>(args)...);
-        }
-    };
-    
-    class ThreadProcedure final
-    {
-    public:
-        ThreadProcedure() = default;
-        
-        template<class TFn, class ...TArgs>
-        explicit ThreadProcedure(TFn&& fn, TArgs&&... args)
-            : callableObject(std::make_unique<CallableContainer<TFn, TArgs...>>(std::forward<TFn>(fn), std::forward<TArgs>(args)...))
-        {}
-        
-        inline void operator()(const StopToken& stopToken) const
-        {
-            if (callableObject)
-            {
-                callableObject->call(stopToken);
-            }
-        }
-        
-    private:
-        std::unique_ptr<CallableContainerBase> callableObject;
-    };
+    #include "private/ThreadStructures.hpp"
     
     std::atomic_bool isStarted { false };
     std::promise<void> startPromise;

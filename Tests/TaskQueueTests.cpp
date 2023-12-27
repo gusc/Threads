@@ -10,301 +10,271 @@
 #   include <Windows.h>
 #endif
 
-#include "TaskQueueTests.hpp"
+#include <gtest/gtest.h>
+
 #include "Utilities.hpp"
 #include "Threads/TaskQueue.hpp"
+#include "TaskQueueMocks.hpp"
 
 #include <chrono>
 
 using namespace std::chrono_literals;
 
-namespace
-{
-static Logger tlog;
-
-std::shared_ptr<std::vector<int>> anon_copyable = std::make_shared<std::vector<int>>(50, 0);
-std::unique_ptr<std::vector<int>> anon_movable = std::make_unique<std::vector<int>>(100, 0);
-
-void af1()
-{
-    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-}
-
-auto al1 = []()
-{
-    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-};
-
-const auto al2 = []()
-{
-    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-};
-
-const auto al3 = [c=anon_copyable]()
-{
-    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(c->size());
-};
-
-const auto al4 = [m=std::move(anon_movable)]()
-{
-    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
-};
-
-}
-
-static std::shared_ptr<std::vector<int>> stat_copyable = std::make_shared<std::vector<int>>(50, 0);
-static std::unique_ptr<std::vector<int>> stat_movable = std::make_unique<std::vector<int>>(100, 0);
-
-static void sf1()
-{
-    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-}
-
-static auto sl1 = []()
-{
-    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-};
-
-static const auto sl2 = []()
-{
-    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-};
-
-static const auto sl3 = [c=stat_copyable]()
-{
-    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(c->size());
-};
-
-static const auto sl4 = [m=std::move(stat_movable)]()
-{
-    tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X:" + std::to_string(m->size());
-};
-
-struct s1
-{
-    void operator()() const
-    {
-        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-    }
-};
-
-class c1
+class SerialTaskQueueTest : public Test
 {
 public:
-    void f1()
-    {
-        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-    }
-    
-    void f2() const
-    {
-        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-    }
-    
-    static void f3()
-    {
-        tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-    }
+    TaskQueueMock actualMock;
+    gusc::Threads::SerialTaskQueue queue { "SerialQueue" };
+    std::mutex mutex;
 };
 
-void runTaskQueueTests()
+class ParallelTaskQueueTest : public Test
 {
-    tlog << "========================";
-    tlog << "Task Queue Tests";
-    tlog << "Main thread ID: " + tidToStr(std::this_thread::get_id());
-    tlog << "========================";
-    
-    gusc::Threads::ThisThread tt;
-    
-    gusc::Threads::SerialTaskQueue t1;
-    gusc::Threads::SerialTaskQueue t2{tt};
+public:
+    TaskQueueMock actualMock;
+    gusc::Threads::ParallelTaskQueue queue { "ParallelQueue", 4 };
+    std::mutex mutex;
+};
 
-    // Test regular sends
-    
-    af1();
-    t1.send(&af1);
-    t2.send(&af1);
-    
-    al1();
-    t1.send(al1);
-    t2.send(al1);
-    
-    al2();
-    t1.send(al2);
-    t2.send(al2);
-    
-    al3();
-    t1.send(al3);
-    t2.send(al3);
-    
-    al4();
+class TaskQueueOnThisThreadTest : public Test
+{
+public:
+    TaskQueueMock actualMock;
+    gusc::Threads::ThisThread tt;
+    gusc::Threads::SerialTaskQueue queue { tt };
+    std::mutex mutex;
+};
+
+
+TEST_F(SerialTaskQueueTest, Send)
+{
+    mock.setMock(&actualMock);
+    EXPECT_CALL(actualMock, call()).Times(14);
+
+    auto mainThreadId = std::this_thread::get_id();
+
+    queue.send(&fn);
+    queue.send(lambda);
+    queue.send(lambdaConst);
+    queue.send(lambdaCopyCapture);
     // A lambda stored in a variable will be passed as reference which
     // results in a copy that again won't work because the object is moveable.
     // The workaround is to pass it as a reference wrapper (@note use only if
     // you are sure the reference will outlive the task queue!)
-    t1.send(std::ref(al4));
-    t2.send(std::ref(al4));
-    
-    sf1();
-    t1.send(&sf1);
-    t2.send(&sf1);
-    
-    sl1();
-    t1.send(sl1);
-    t2.send(sl1);
-    
-    sl2();
-    t1.send(sl2);
-    t2.send(sl2);
-    
-    sl3();
-    t1.send(sl3);
-    t2.send(sl3);
-    
-    sl4();
-    // A lambda stored in a variable will be passed as reference which
-    // results in a copy that again won't work because the object is moveable.
-    // The workaround is to pass it as a reference wrapper (@note use only if
-    // you are sure the reference will outlive the task queue!)
-    t1.send(std::ref(sl4));
-    t2.send(std::ref(sl4));
-    
+    queue.send(std::ref(lambdaMoveCapture));
     {
-        s1 cb;
-        cb();
-        t1.send(cb);
-        t2.send(cb);
+        functor fn;
+        queue.send(fn);
     }
     {
-        const s1 cb;
-        cb();
-        t1.send(cb);
-        t2.send(cb);
+        const functor fn;
+        queue.send(fn);
     }
+    // Temporary struct
+    queue.send(functor{});
     {
-        // Temporary struct
-        tlog << "Temporary s1";
-        t1.send(s1{});
-        t2.send(s1{});
+        cls o;
+        queue.send(std::bind(&cls::fn, &o));
+        queue.send(std::bind(&cls::fnConst, &o));
+        queue.send(&cls::fnStatic);
+        // TODO: We should wait for the task to finish otherwise it might get executed after o is detroyed
     }
-    
-    {
-        c1 o;
-        o.f1();
-        t1.send(std::bind(&c1::f1, &o));
-        t2.send(std::bind(&c1::f1, &o));
-    }
-    {
-        c1 o;
-        o.f2();
-        t1.send(std::bind(&c1::f2, &o));
-        t2.send(std::bind(&c1::f2, &o));
-    }
-    {
-        c1::f3();
-        t1.send(&c1::f3);
-        t2.send(&c1::f3);
-    }
-    
-    {
-        tlog << "Local lambda";
-        auto localLambda = [](){
-            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-        };
-        localLambda();
-        t1.send(localLambda);
-        t2.send(localLambda);
-    }
-    {
-        tlog << "Anonymous lambda";
-        t1.send([](){
-            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-        });
-        t2.send([](){
-            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id());
-        });
-    }
-    {
-        tlog << "Anonymous lambda with movable data";
-        auto movable_data1 = std::make_unique<std::vector<int>>(10, 0);
-        t1.send([m=std::move(movable_data1)](){
-            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X: " + std::to_string(m->size());
-        });
-        auto movable_data2 = std::make_unique<std::vector<int>>(10, 0);
-        t2.send([m=std::move(movable_data2)](){
-            tlog << "Function: " + std::string(__func__) + " ID: " + tidToStr(std::this_thread::get_id()) + " X: " + std::to_string(m->size());
-        });
-    }
-    
-    // Test delayed tasks
-    t1.sendDelayed([](){
-        tlog << "Delayed message on thread ID: " + tidToStr(std::this_thread::get_id());
-        tlog.flush();
+    auto localLambda = [&](){
+        mock.call();
+        EXPECT_NE(mainThreadId, std::this_thread::get_id());
+    };
+    queue.send(localLambda);
+    queue.send([&](){
+        mock.call();
+        EXPECT_NE(mainThreadId, std::this_thread::get_id());
+    });
+    auto movable_data = std::make_unique<std::vector<int>>(10, 0);
+    queue.send([mainThreadId, m=std::move(movable_data)](){
+        mock.call();
+        EXPECT_NE(mainThreadId, std::this_thread::get_id());
+    });
+
+    // Just wait till all the tasks are finished
+    std::this_thread::sleep_for(100ms);
+
+    mock.setMock(nullptr);
+}
+
+TEST_F(SerialTaskQueueTest, SendDelayed)
+{
+    mock.setMock(&actualMock);
+    int numCalls { 1 };
+    EXPECT_CALL(actualMock, call()).Times(numCalls);
+
+    std::condition_variable cv;
+    std::unique_lock lock { mutex };
+    int counter { 0 };
+    queue.sendDelayed([&](){
+        mock.call();
+        std::lock_guard lock { mutex };
+        ++counter;
+        cv.notify_one();
     }, 1s);
-    t2.sendDelayed([](){
-        tlog << "Delayed message on thread ID: " + tidToStr(std::this_thread::get_id());
-        tlog.flush();
-    }, 2s);
-    
-    std::this_thread::sleep_for(2.5s);
-    
-    // Test exceptions
+    auto result = cv.wait_for(lock, 1100ms, [&](){ return counter == numCalls; });
+    EXPECT_TRUE(result);
+    EXPECT_EQ(counter, numCalls);
+
+    mock.setMock(nullptr);
+}
+
+TEST_F(SerialTaskQueueTest, Exceptions)
+{
+    mock.setMock(&actualMock);
+    EXPECT_CALL(actualMock, call()).Times(1);
+    EXPECT_CALL(actualMock, noCall()).Times(0);
+    EXPECT_CALL(actualMock, recover()).Times(1);
+
     try
     {
-        t1.sendWait([](){
-            tlog << "Exception lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        queue.sendWait([](){
+            mock.call();
             throw std::runtime_error("Oops");
+            mock.noCall();
         });
     }
     catch (const std::exception& ex)
     {
-        tlog << ex.what();
+        mock.recover();
     }
-    
-    // Test blocking calls
-    t1.sendWait([](){
-        tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+
+    mock.setMock(nullptr);
+}
+
+TEST_F(SerialTaskQueueTest, SendWait)
+{
+    mock.setMock(&actualMock);
+    EXPECT_CALL(actualMock, call()).Times(1);
+
+    auto mainThreadId = std::this_thread::get_id();
+
+    queue.sendWait([&](){
+        mock.call();
+        EXPECT_NE(mainThreadId, std::this_thread::get_id());
     });
-    t2.sendWait([](){
-        tlog << "Blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
-    });
-    auto f1 = t1.sendAsync<int>([&]() -> int {
+
+    mock.setMock(nullptr);
+}
+
+TEST_F(SerialTaskQueueTest, SendAsync)
+{
+    mock.setMock(&actualMock);
+    EXPECT_CALL(actualMock, call()).Times(2);
+
+    auto mainThreadId = std::this_thread::get_id();
+
+    auto f1 = queue.sendAsync<int>([&]() -> int {
         // Try to do a blocking call from the same thread
-        t1.sendWait([](){
-            tlog << "Sub blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        queue.sendWait([&](){
+            mock.call();
+            EXPECT_NE(mainThreadId, std::this_thread::get_id());
         });
+        EXPECT_NE(mainThreadId, std::this_thread::get_id());
         return 10;
     });
-    auto f2 = t2.sendAsync<int>([]() -> int {
+    auto f2 = queue.sendAsync<int>([&]() -> int {
+        mock.call();
+        EXPECT_NE(mainThreadId, std::this_thread::get_id());
         return 20;
     });
-    auto res1 = t1.sendSync<int>([&]() -> int {
+
+    EXPECT_EQ(f1.getValue(), 10);
+    EXPECT_EQ(f2.getValue(), 20);
+
+    mock.setMock(nullptr);
+}
+
+TEST_F(SerialTaskQueueTest, SendSync)
+{
+    mock.setMock(&actualMock);
+    EXPECT_CALL(actualMock, call()).Times(2);
+
+    auto mainThreadId = std::this_thread::get_id();
+
+    auto res1 = queue.sendSync<int>([&]() -> int {
         // Try to do a blocking call from the same thread
-        t1.sendWait([](){
-            tlog << "Sub blocking lambda thread ID: " + tidToStr(std::this_thread::get_id());
+        queue.sendWait([&](){
+            mock.call();
+            EXPECT_NE(mainThreadId, std::this_thread::get_id());
         });
+        EXPECT_NE(mainThreadId, std::this_thread::get_id());
         return 1;
     });
-    auto res2 = t2.sendSync<int>([]() -> int {
+    auto res2 = queue.sendSync<int>([&]() -> int {
+        mock.call();
+        EXPECT_NE(mainThreadId, std::this_thread::get_id());
         return 2;
     });
-    tlog << "Sync and async results" + std::to_string(f1.getValue()) + std::to_string(f2.getValue()) + std::to_string(res1) + std::to_string(res2);
-    tlog.flush();
-    
-    t2.sendDelayed([&](){
-        tlog << "Stopping serial queue running on ThisThread";
+
+    EXPECT_EQ(res1, 1);
+    EXPECT_EQ(res2, 2);
+
+    mock.setMock(nullptr);
+}
+
+TEST_F(ParallelTaskQueueTest, SendAsync)
+{
+    mock.setMock(&actualMock);
+    int numCalls { 4 };
+    EXPECT_CALL(actualMock, call()).Times(numCalls);
+
+    auto mainThreadId = std::this_thread::get_id();
+
+    std::condition_variable cv;
+    std::unique_lock lock { mutex };
+    std::vector<std::thread::id> ids;
+
+    const auto lambda = [&]() -> int {
+        auto threadId = std::this_thread::get_id();
+        EXPECT_NE(mainThreadId, threadId);
+        // Wait for all other tasks to be picked up by different threads
+        std::this_thread::sleep_for(100ms);
+        // Test thread IDs
+        std::lock_guard lock { mutex };
+        auto it = std::find(ids.begin(), ids.end(), threadId);
+        EXPECT_EQ(it, ids.end());
+        ids.emplace_back(threadId);
+        mock.call();
+        return 1;
+    };
+    auto f1 = queue.sendAsync<int>(std::ref(lambda));
+    auto f2 = queue.sendAsync<int>(std::ref(lambda));
+    auto f3 = queue.sendAsync<int>(std::ref(lambda));
+    auto f4 = queue.sendAsync<int>(std::ref(lambda));
+
+    auto res = cv.wait_for(lock, 200ms, [&](){ return ids.size() == numCalls; });
+    EXPECT_TRUE(res);
+
+    EXPECT_EQ(f1.getValue(), 1);
+    EXPECT_EQ(f2.getValue(), 1);
+    EXPECT_EQ(f3.getValue(), 1);
+    EXPECT_EQ(f4.getValue(), 1);
+
+    mock.setMock(nullptr);
+}
+
+TEST_F(TaskQueueOnThisThreadTest, Test)
+{
+    mock.setMock(&actualMock);
+    EXPECT_CALL(actualMock, call()).Times(1);
+
+    auto mainThreadId = std::this_thread::get_id();
+
+    // Initiate ThisThread stop with a delay
+    queue.sendDelayed([&](){
         tt.stop();
     }, 3s);
-    
+
+    queue.send([&](){
+        mock.call();
+        EXPECT_EQ(mainThreadId, std::this_thread::get_id());
+    });
+
     // Start ThisThread
     tt.start();
-    std::this_thread::sleep_for(5s);
-    
-    // Task queue objects are destroyed and their threads are stopped
-    
-    tlog << "========================";
-    tlog << "Done";
-    tlog << "========================";
-    
-    tlog.flush();
 }
+

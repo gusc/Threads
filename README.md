@@ -53,7 +53,16 @@ Additionally library provides a `ThisThread` class to execute procedure in `Thre
 
 ### ThreadPool class
 
-WIP
+Thread pool allows running single callable object on multiple threads.
+
+`ThreadPool` methods:
+
+* `ThreadPool(std::string threadName, std::size_t threadCount, TFunction&&, TArgs&&...)` - constructor accepting any kind of callable objects and additional arguments (there is a special case for function that accepts `[const ]Thread::StopToken[&]` as it's first argument)
+* `void resize(std::size_t threadCount)` resize the thread pool (only invocable while thread pool is not running, otherwise an exception will be thrown)
+* `void start()` - start running the thread
+* `void stop()` - signal the thread to stop - this will signal the `Thread::StopToken` which you can then check on your thread procedure via `Thread::StopToken::getIsStopping()` method
+* `std::size_t getSize()` - get number of threads in the pool
+* `bool getIsThreadIdInPool(std::thread::id threadId)` - check if thread ID provided is in the pool
 
 ### Examples
 
@@ -119,7 +128,9 @@ The implementation of serial task queue is based on `TaskQueue` with serial run-
 
 ### ParallelTaskQueue class
 
-WIP
+The implementation of parallel task queue is based on `TaskQueue` with concurrent job-stealing run-loop logic runing on a `ThreadPool`.
+
+* `ParallelTaskQueue(const std::string& queueName, std::size_t queueCount)` - construct a new parallel task queue
 
 ### Examples
 

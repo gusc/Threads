@@ -1,18 +1,13 @@
-//
-//  main.cpp
-//  Threads
-//
-//  Created by Gusts Kaksis on 21/11/2020.
-//  Copyright © 2020 Gusts Kaksis. All rights reserved.
-//
+#include <gmock/gmock.h>
 
-#include "ThreadTests.hpp"
-#include "TaskQueueTests.hpp"
-#include "SignalTests.hpp"
+int _argc;
+char** _argv;
 
-int main(int argc, const char * argv[]) {
-    runThreadTests();
-    runTaskQueueTests();
-    runSignalTests();
-    return 0;
+int main(int argc, char *argv[])
+{
+    testing::InitGoogleTest(&argc, argv);
+    testing::InitGoogleMock(&argc, argv);
+    _argc = argc;
+    _argv = argv;
+    return RUN_ALL_TESTS();
 }
