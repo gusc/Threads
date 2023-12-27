@@ -140,24 +140,21 @@ For actual real-world usage examples see [Examples directory](./Examples) and [T
 
 Library provides a Qt-style signal-slot functionality, but with standard C++ only.
 
-Signals are means to emit data to multiple listeners at once. All you have to do is to `connect()` to each signal with a target thread (`Thread*`) on which the callback should be executed and a callback function pointer itself.
+Signals are means to emit data to multiple listeners at once. All you have to do is to `connect()` to each signal with a target task queue (`std::weak_ptr<TaskQueue>`) on which the callback should be executed and a callback object itself (can be anything callable - functor, lambda, function pointer, bound method, etc.)
 
 If the listener is on the same thread where signal was emitted from it's called directly and all the data is passed as `const&`. Data is only copied when signal is emitted to a different thread, then the data is packed together with the callback and placed on that threads message queue for later processing.
 
 ### Signal class
 
-It's a templated class who's method signature depend on what arguments the signal has.
-
 `Signal` methods:
 
-* `size_t connect(Thread*, const std::function<void(TArg...)>&)` - connect a listener to the signal (returns the connection ID or 0 if failed to store the connection)
-* `size_t connect(T*, const void(T::*)(TArg...))` - connect a listener member method of Thread class derivative to the signal (returns the connection ID or 0 if failed to store the connection)
-* `bool disconnect(Thread*, const std::function<void(TArg...)>&)` - disconnect a listener from the signal (returns false if function/thread pair is not found or if function came from temporary object, like std::bind)
-* `bool disconnect(T*, const void(T::*)(TArg...))` - disconnect a listener member method of Thread class derivative from the signal (returns false if function/thread is not found in connection list)
-* `bool disconnect(const size_t)` - disconnect a listener from the signal by connection ID (returns false if ID not found in connection list)
-* `void emit(const TArg&...)` - emit the signal with data - this will call all the connected listeners on their respective affinity threads
+* `std::unique_ptr<Connection> connect(std::weak_ptr<TaskQueue> queue, const TCallable&)` - connect a callable listener that should be executed on associated TaskQueue to the signal (returns the connection handle)
+* `void disconnectAll()` - disconnect all listeners from the signal
+* `void emit(const TArg&...)` - emit the signal with data - this will call all the connected listeners on their respective task queues
 
-When disconnecting listeners from signals, for function objects, like ones returned by `std::bind` or lambdas, you should use connection ID's.
+`Connection` methods:
+
+* `void close()` - disconnect from signal
 
 ### Examples
 
