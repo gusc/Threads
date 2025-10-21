@@ -32,6 +32,7 @@ public:
         {
             threads.emplace_back(std::make_unique<Thread>(threadPoolName + "[" + std::to_string(i) + "]", threadProcedure));
         }
+        (void)threadPriority; // Currently unused
     }
     // Thread("name", size, function, args...)
     template <class TFn, class ...TArgs,
@@ -75,7 +76,7 @@ public:
         else if (newSize < threads.size())
         {
             // Remove threads from the end
-            threads.erase(threads.end() - (threads.size() - newSize), threads.end());
+            threads.erase(threads.end() - static_cast<std::int64_t>(threads.size() - newSize), threads.end());
         }
     }
     

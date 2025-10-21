@@ -23,9 +23,9 @@ public:
         , args(std::make_tuple<TArgs&&...>(std::forward<TArgs>(initArgs)...))
     {}
     
-    void operator()(const Thread::StopToken& stopToken) const override
+    void operator()(const Thread::StopToken& stopTokenArg) const override
     {
-        callSpec<TFn>(stopToken, std::index_sequence_for<TArgs...>());
+        callSpec<TFn>(stopTokenArg, std::index_sequence_for<TArgs...>());
     }
     
 private:
@@ -36,9 +36,9 @@ private:
     inline
     typename std::enable_if_t<
         std::is_invocable<T, Thread::StopToken, TArgs...>::value,
-        void> callSpec(const Thread::StopToken& stopToken, std::index_sequence<Is...>) const
+        void> callSpec(const Thread::StopToken& stopTokenArg, std::index_sequence<Is...>) const
     {
-        std::invoke(fn, stopToken, std::get<Is>(args)...);
+        std::invoke(fn, stopTokenArg, std::get<Is>(args)...);
     }
     
     template<typename T, std::size_t... Is>
@@ -61,11 +61,11 @@ public:
         : callableObject(std::make_unique<CallableContainer<TFn, TArgs...>>(std::forward<TFn>(fn), std::forward<TArgs>(args)...))
     {}
     
-    inline void operator()(const Thread::StopToken& stopToken) const
+    inline void operator()(const Thread::StopToken& stopTokenArg) const
     {
         if (callableObject)
         {
-            (*callableObject)(stopToken);
+            (*callableObject)(stopTokenArg);
         }
     }
     

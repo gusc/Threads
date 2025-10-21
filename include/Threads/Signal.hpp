@@ -167,7 +167,7 @@ public:
             other.signal = nullptr;
             return *this;
         }
-        ~Connection()
+        ~Connection() override
         {
             close();
         }
@@ -403,7 +403,7 @@ public:
             other.signal = nullptr;
             return *this;
         }
-        ~Connection()
+        ~Connection() override
         {
             close();
         }

@@ -37,6 +37,8 @@ public:
         TaskHandle(std::weak_ptr<Task> initTask)
             : task(initTask)
         {}
+        TaskHandle(const TaskHandle&) = default;
+        TaskHandle& operator=(const TaskHandle&) = default;
         virtual ~TaskHandle() = default;
         /// @brief cancel the delayed task
         inline void cancel() noexcept
@@ -707,7 +709,7 @@ public:
     ParallelTaskQueue(std::size_t initQueueCount)
         : ParallelTaskQueue("gusc::Threads::ParallelTaskQueue", initQueueCount)
     {}
-    ~ParallelTaskQueue()
+    ~ParallelTaskQueue() override
     {
         setAcceptsTasks(false);
         if (threadPool.getIsStarted())

@@ -123,8 +123,8 @@ public:
     {}
     // Thread(priority, function, args...)
     template <class TFn, class ...TArgs>
-    Thread(Priority priority, TFn&& fn, TArgs&&... args)
-        : Thread("gust::Threads::Thread", priority, std::forward<TFn>(fn), std::forward<TArgs>(args)...)
+    Thread(Priority initPriority, TFn&& fn, TArgs&&... args)
+        : Thread("gust::Threads::Thread", initPriority, std::forward<TFn>(fn), std::forward<TArgs>(args)...)
     {}
     // Thread(function, args...)
     template <class TFn, class ...TArgs,
