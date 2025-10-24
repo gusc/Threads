@@ -24,7 +24,11 @@ if (${CMAKE_VERSION} VERSION_GREATER "3.19.0")
 else()
 	add_library(${PROJECT_NAME} INTERFACE)
 endif()
-target_sources(${PROJECT_NAME} PUBLIC ${SOURCES})
+if(CMAKE_VERSION VERSION_LESS "3.22.0")
+    target_sources(${PROJECT_NAME} INTERFACE ${SOURCES})
+else()
+    target_sources(${PROJECT_NAME} PUBLIC ${SOURCES})
+endif()
 target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
 target_include_directories(${PROJECT_NAME} INTERFACE
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/>
