@@ -13,6 +13,7 @@
 
 #include <tuple>
 #include <map>
+#include <atomic>
 
 namespace gusc
 {
@@ -124,6 +125,15 @@ public:
     Signal& operator=(Signal<TArg...>&& other) = delete;
     ~Signal()
     {
+        acceptsSignals = false;
+        try
+        {
+            std::lock_guard<std::mutex> lock(emitMutex);
+        }
+        catch (...)
+        {
+            // Do nothing, at least we tried
+        }
         for (auto& c : connections)
         {
             c->close();
@@ -196,6 +206,10 @@ public:
     template<typename TCallable>
     inline std::unique_ptr<Connection> connect(std::weak_ptr<TaskQueue> queue, const TCallable& callback) noexcept
     {
+        if (!acceptsSignals)
+        {
+            return nullptr;
+        }
         std::lock_guard<std::mutex> lock(emitMutex);
         std::shared_ptr<CallableBase> callable = std::make_shared<CallableWrapper<TCallable>>(callback);
         auto& slot = slots.emplace_back(std::make_shared<Slot>(queue, std::move(callable)));
@@ -205,6 +219,10 @@ public:
     /// @brief disconnect all listeners from this signal
     inline void disconnectAll() noexcept
     {
+        if (!acceptsSignals)
+        {
+            return;
+        }
         std::lock_guard<std::mutex> lock(emitMutex);
         slots.clear();
     }
@@ -213,6 +231,10 @@ public:
     /// @param data - signal arguments
     inline void emit(const TArg&... data) noexcept
     {
+        if (!acceptsSignals)
+        {
+            return;
+        }
         std::lock_guard<std::mutex> lock(emitMutex);
         for (const auto& slot : slots)
         {
@@ -227,8 +249,9 @@ public:
     }
     
 private:
-    std::vector<std::shared_ptr<Slot>> slots;
+    std::atomic_bool acceptsSignals { true };
     std::mutex emitMutex;
+    std::vector<std::shared_ptr<Slot>> slots;
     std::vector<Connection*> connections;
 
     inline void registerConnection(Connection* connection)
