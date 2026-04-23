@@ -32,7 +32,7 @@ inline void setThisThreadPriority() noexcept
 
         const auto timeframe = 0.01; // 10ms
         const auto time = timeframe * NSEC_PER_SEC;
-        const auto freq = static_cast<float>(timebaseInfo.denom) / timebaseInfo.numer;
+        const auto freq = static_cast<float>(timebaseInfo.denom) / static_cast<float>(timebaseInfo.numer);
         const auto deadline = static_cast<uint32_t>(time * freq);
 
         thread_time_constraint_policy_data_t policy;
