@@ -122,18 +122,8 @@ TEST_F(SerialTaskQueueTest, SendDelayed)
     mock.setMock(nullptr);
 }
 
-// Regression test for a bug where delayedQueue (a std::multiset<std::unique_ptr<DelayedTaskWrapper>>)
-// was ordered by the unique_ptr's own address (std::multiset's default comparator) instead of by
-// task deadline, since DelayedTaskWrapper's hand-written operator< was never actually invoked by the
-// container. enqueueDelayedTasks() assumes delayedQueue is time-sorted: it breaks out of its loop on
-// the first not-yet-due entry, and picks the next wake time from delayedQueue.begin(). With
-// address-based ordering, a longer-delay task scheduled first can sort before a shorter-delay task
-// scheduled afterwards, causing the loop to break early and wait_until() to oversleep - starving the
-// shorter-delay task until the longer one's deadline arrives.
-//
-// This mirrors a real production issue: ASPDSPConfiguration schedules a 1s recurring "heartbeat" task
-// before a 33ms recurring "telemetry" (VU meter) task on the same TaskQueue. The telemetry task ended
-// up firing only about once per second instead of every 33ms.
+// Regression: delayedQueue must be ordered by deadline, not by unique_ptr address.
+// A longer-delay task scheduled first must not starve a shorter-delay task scheduled afterwards.
 TEST_F(SerialTaskQueueTest, SendDelayed_FastTaskNotStarvedByEarlierSlowerTask)
 {
     std::condition_variable cv;
@@ -146,8 +136,7 @@ TEST_F(SerialTaskQueueTest, SendDelayed_FastTaskNotStarvedByEarlierSlowerTask)
     constexpr auto slowDelay = 500ms;
     constexpr auto fastDelay = 30ms;
 
-    // Schedule the slow (long-delay) task FIRST, matching production ordering (heartbeat is
-    // scheduled before telemetry in ASPDSPConfiguration's constructor).
+    // Schedule the slow (long-delay) task first.
     queue.sendDelayed([&](){
         std::lock_guard lock { mutex };
         slowCompleted = true;
@@ -162,9 +151,8 @@ TEST_F(SerialTaskQueueTest, SendDelayed_FastTaskNotStarvedByEarlierSlowerTask)
         cv.notify_one();
     }, fastDelay);
 
-    // The fast task must fire well before the slow task's deadline. Bound the wait comfortably
-    // below slowDelay so a starved fast task times out here instead of the wait masking the bug
-    // by lasting long enough for the slow task to (indirectly) unblock it.
+    // Fast task must fire well before the slow deadline; wait bound below slowDelay so starvation
+    // times out here instead of being masked by waiting long enough for the slow task.
     const auto waitBound = slowDelay / 2;
     auto result = cv.wait_for(lock, waitBound, [&](){ return fastCompleted; });
 

@@ -441,14 +441,6 @@ protected:
         std::shared_ptr<Task> task;
     };
 
-    /// @brief Compares DelayedTaskWrapper instances by their deadline rather than by the
-    /// std::unique_ptr's own address, which is what std::multiset's default std::less<Key>
-    /// would otherwise do for Key = std::unique_ptr<DelayedTaskWrapper>. Without this,
-    /// delayedQueue below is ordered by allocation address, not time: enqueueDelayedTasks()'s
-    /// "break on first not-yet-due entry" and its "next wake time = begin()->getTime()" logic
-    /// both silently assume time-ordering, so a not-yet-due task that happens to sort first
-    /// by address can starve/delay an already-due task scheduled after it (e.g. a slow,
-    /// long-interval recurring task masking a fast, short-interval one on the same queue).
     struct DelayedTaskWrapperCompare
     {
         inline bool operator()(const std::unique_ptr<DelayedTaskWrapper>& lhs, const std::unique_ptr<DelayedTaskWrapper>& rhs) const noexcept
