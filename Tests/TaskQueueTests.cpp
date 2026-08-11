@@ -122,6 +122,57 @@ TEST_F(SerialTaskQueueTest, SendDelayed)
     mock.setMock(nullptr);
 }
 
+// Regression: delayedQueue must be ordered by deadline, not by unique_ptr address.
+// A longer-delay task scheduled first must not starve a shorter-delay task scheduled afterwards.
+TEST_F(SerialTaskQueueTest, SendDelayed_FastTaskNotStarvedByEarlierSlowerTask)
+{
+    std::condition_variable cv;
+    std::unique_lock lock { mutex };
+    bool slowCompleted { false };
+    bool fastCompleted { false };
+    std::chrono::steady_clock::time_point fastCompletedAt;
+
+    const auto testStart = std::chrono::steady_clock::now();
+    constexpr auto slowDelay = 500ms;
+    constexpr auto fastDelay = 30ms;
+
+    // Schedule the slow (long-delay) task first.
+    queue.sendDelayed([&](){
+        std::lock_guard lock { mutex };
+        slowCompleted = true;
+        cv.notify_one();
+    }, slowDelay);
+
+    // Then schedule the fast (short-delay) task.
+    queue.sendDelayed([&](){
+        std::lock_guard lock { mutex };
+        fastCompleted = true;
+        fastCompletedAt = std::chrono::steady_clock::now();
+        cv.notify_one();
+    }, fastDelay);
+
+    // Fast task must fire well before the slow deadline; wait bound below slowDelay so starvation
+    // times out here instead of being masked by waiting long enough for the slow task.
+    const auto waitBound = slowDelay / 2;
+    auto result = cv.wait_for(lock, waitBound, [&](){ return fastCompleted; });
+
+    EXPECT_TRUE(result) << "fast (" << fastDelay.count() << "ms) task did not fire within "
+                         << std::chrono::duration_cast<std::chrono::milliseconds>(waitBound).count()
+                         << "ms; it appears to have been starved by the earlier-scheduled, slower ("
+                         << std::chrono::duration_cast<std::chrono::milliseconds>(slowDelay).count() << "ms) task";
+    EXPECT_FALSE(slowCompleted) << "slow task fired before the fast task, which should not happen with correct time-ordering";
+
+    if (fastCompleted)
+    {
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(fastCompletedAt - testStart);
+        EXPECT_LT(elapsed, std::chrono::duration_cast<std::chrono::milliseconds>(waitBound))
+            << "fast task took " << elapsed.count() << "ms to fire, expected close to " << fastDelay.count() << "ms";
+    }
+
+    // Drain the slow task so it doesn't touch destroyed locals after the test scope exits.
+    cv.wait_for(lock, slowDelay, [&](){ return slowCompleted; });
+}
+
 TEST_F(SerialTaskQueueTest, Exceptions)
 {
     mock.setMock(&actualMock);

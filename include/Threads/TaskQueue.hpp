@@ -424,7 +424,7 @@ protected:
             : time(initTime)
             , task(std::move(initTask))
         {}
-        inline bool operator<(const DelayedTaskWrapper& other)
+        inline bool operator<(const DelayedTaskWrapper& other) const noexcept
         {
             return time < other.getTime();
         }
@@ -439,6 +439,14 @@ protected:
     private:
         const std::chrono::time_point<std::chrono::steady_clock> time {};
         std::shared_ptr<Task> task;
+    };
+
+    struct DelayedTaskWrapperCompare
+    {
+        inline bool operator()(const std::unique_ptr<DelayedTaskWrapper>& lhs, const std::unique_ptr<DelayedTaskWrapper>& rhs) const noexcept
+        {
+            return *lhs < *rhs;
+        }
     };
     
     inline std::chrono::time_point<std::chrono::steady_clock> enqueueDelayedTasks(std::chrono::time_point<std::chrono::steady_clock> timeNow)
@@ -643,7 +651,7 @@ private:
     std::thread::id threadId { std::this_thread::get_id() };
     std::atomic_bool acceptsTasks { true };
     std::queue<std::shared_ptr<Task>> taskQueue;
-    std::multiset<std::unique_ptr<DelayedTaskWrapper>> delayedQueue;
+    std::multiset<std::unique_ptr<DelayedTaskWrapper>, DelayedTaskWrapperCompare> delayedQueue;
     std::vector<std::weak_ptr<TaskQueue>> subQueues;
     std::function<void(void)> queueNotifyCallback { nullptr };
     std::recursive_mutex taskQueueMutex;
