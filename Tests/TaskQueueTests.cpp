@@ -122,6 +122,69 @@ TEST_F(SerialTaskQueueTest, SendDelayed)
     mock.setMock(nullptr);
 }
 
+// Regression test for a bug where delayedQueue (a std::multiset<std::unique_ptr<DelayedTaskWrapper>>)
+// was ordered by the unique_ptr's own address (std::multiset's default comparator) instead of by
+// task deadline, since DelayedTaskWrapper's hand-written operator< was never actually invoked by the
+// container. enqueueDelayedTasks() assumes delayedQueue is time-sorted: it breaks out of its loop on
+// the first not-yet-due entry, and picks the next wake time from delayedQueue.begin(). With
+// address-based ordering, a longer-delay task scheduled first can sort before a shorter-delay task
+// scheduled afterwards, causing the loop to break early and wait_until() to oversleep - starving the
+// shorter-delay task until the longer one's deadline arrives.
+//
+// This mirrors a real production issue: ASPDSPConfiguration schedules a 1s recurring "heartbeat" task
+// before a 33ms recurring "telemetry" (VU meter) task on the same TaskQueue. The telemetry task ended
+// up firing only about once per second instead of every 33ms.
+TEST_F(SerialTaskQueueTest, SendDelayed_FastTaskNotStarvedByEarlierSlowerTask)
+{
+    std::condition_variable cv;
+    std::unique_lock lock { mutex };
+    bool slowCompleted { false };
+    bool fastCompleted { false };
+    std::chrono::steady_clock::time_point fastCompletedAt;
+
+    const auto testStart = std::chrono::steady_clock::now();
+    constexpr auto slowDelay = 500ms;
+    constexpr auto fastDelay = 30ms;
+
+    // Schedule the slow (long-delay) task FIRST, matching production ordering (heartbeat is
+    // scheduled before telemetry in ASPDSPConfiguration's constructor).
+    queue.sendDelayed([&](){
+        std::lock_guard lock { mutex };
+        slowCompleted = true;
+        cv.notify_one();
+    }, slowDelay);
+
+    // Then schedule the fast (short-delay) task.
+    queue.sendDelayed([&](){
+        std::lock_guard lock { mutex };
+        fastCompleted = true;
+        fastCompletedAt = std::chrono::steady_clock::now();
+        cv.notify_one();
+    }, fastDelay);
+
+    // The fast task must fire well before the slow task's deadline. Bound the wait comfortably
+    // below slowDelay so a starved fast task times out here instead of the wait masking the bug
+    // by lasting long enough for the slow task to (indirectly) unblock it.
+    const auto waitBound = slowDelay / 2;
+    auto result = cv.wait_for(lock, waitBound, [&](){ return fastCompleted; });
+
+    EXPECT_TRUE(result) << "fast (" << fastDelay.count() << "ms) task did not fire within "
+                         << std::chrono::duration_cast<std::chrono::milliseconds>(waitBound).count()
+                         << "ms; it appears to have been starved by the earlier-scheduled, slower ("
+                         << std::chrono::duration_cast<std::chrono::milliseconds>(slowDelay).count() << "ms) task";
+    EXPECT_FALSE(slowCompleted) << "slow task fired before the fast task, which should not happen with correct time-ordering";
+
+    if (fastCompleted)
+    {
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(fastCompletedAt - testStart);
+        EXPECT_LT(elapsed, std::chrono::duration_cast<std::chrono::milliseconds>(waitBound))
+            << "fast task took " << elapsed.count() << "ms to fire, expected close to " << fastDelay.count() << "ms";
+    }
+
+    // Drain the slow task so it doesn't touch destroyed locals after the test scope exits.
+    cv.wait_for(lock, slowDelay, [&](){ return slowCompleted; });
+}
+
 TEST_F(SerialTaskQueueTest, Exceptions)
 {
     mock.setMock(&actualMock);
