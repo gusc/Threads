@@ -91,7 +91,7 @@ This library provides a task queue which allows posting more complex tasks on a 
 `TaskQueue` task methods:
 
 * `void send(const TCallable&)` - place a callable object on the task queue
-* `TaskHandle sendDelayed(const TCallable&, const std::chrono:milliseconds&)` - place a callable object on the message queue and execute it after set delay time has elapsed (this method also returns a `TaskHandle` object that allows to cancel the message while it's delay hasn't elapsed).
+* `TaskHandle sendDelayed(const TCallable&, const std::chrono::milliseconds&)` - place a callable object on the message queue and execute it after set delay time has elapsed (this method also returns a `TaskHandle` object that allows to cancel the message while it's delay hasn't elapsed).
 * `TaskHandleWithResult<TReturn> sendAsync<TReturn>(const TCallable&)` - place a callable object that can return value asynchronously on the task queue (this message return `TaskHandleWithResult<TReturn>` - similar to `TaskHandle`, but it can also be use to block current thread until the task has finished or exception has occurred.
 * `TReturn sendSync<TReturn>(const TCallable&)` - place a callable object that can return value synchronously on the task queue (this blocks calling thread until the callable finishes and returns)
 * `void sendWait(const TCallable&)` - place a callable object on the task queue and block until it's executed queue
