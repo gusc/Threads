@@ -14,7 +14,16 @@
 #include <future>
 #include <type_traits>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+// private/ThreadWindows.hpp uses the Win32 API (GetThreadId, RaiseException,
+// SetThreadPriority); include it here so users of this header need not.
+// Only NOMINMAX: WIN32_LEAN_AND_MEAN would also apply to every later
+// <Windows.h> include in the same translation unit and strip APIs it expects.
+#   ifndef NOMINMAX
+#       define NOMINMAX
+#   endif
+#   include <Windows.h>
+#else
 #   include <pthread.h>
 #   if defined(__APPLE__)
 #       include <mach/mach_time.h>

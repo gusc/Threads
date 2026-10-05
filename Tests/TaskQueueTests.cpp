@@ -100,6 +100,21 @@ TEST_F(SerialTaskQueueTest, Send)
     mock.setMock(nullptr);
 }
 
+TEST_F(SerialTaskQueueTest, Send_WakesIdleQueueEveryTime)
+{
+    // Regression: a task sent while the queue thread was between its empty check and
+    // its wait used to miss the notification and sat there until the next task arrived
+    for (int i = 0; i < 2000; ++i)
+    {
+        std::promise<void> done;
+        auto future = done.get_future();
+        queue.send([&done](){
+            done.set_value();
+        });
+        ASSERT_EQ(future.wait_for(2s), std::future_status::ready) << "task " << i << " was not picked up";
+    }
+}
+
 TEST_F(SerialTaskQueueTest, SendDelayed)
 {
     mock.setMock(&actualMock);
@@ -265,6 +280,19 @@ TEST_F(SerialTaskQueueTest, SendSync)
     EXPECT_EQ(res2, 2);
 
     mock.setMock(nullptr);
+}
+
+TEST_F(ParallelTaskQueueTest, Send_WakesIdleQueueEveryTime)
+{
+    for (int i = 0; i < 2000; ++i)
+    {
+        std::promise<void> done;
+        auto future = done.get_future();
+        queue.send([&done](){
+            done.set_value();
+        });
+        ASSERT_EQ(future.wait_for(2s), std::future_status::ready) << "task " << i << " was not picked up";
+    }
 }
 
 TEST_F(ParallelTaskQueueTest, SendAsync)

@@ -112,8 +112,12 @@ public:
     {
         if (getAcceptsTasks())
         {
-            const std::lock_guard lock(taskQueueMutex);
-            taskQueue.emplace(std::make_shared<TaskWithCallable<TCallable>>(std::forward<TCallable>(newTask)));
+            {
+                const std::lock_guard lock(taskQueueMutex);
+                taskQueue.emplace(std::make_shared<TaskWithCallable<TCallable>>(std::forward<TCallable>(newTask)));
+            }
+            // Notify after releasing taskQueueMutex: the notification takes waitMutex,
+            // and the run loop holds waitMutex while it takes taskQueueMutex
             notifyQueueChange();
         }
         else
@@ -138,11 +142,13 @@ public:
     {
         if (getAcceptsTasks())
         {
-            const std::lock_guard lock(taskQueueMutex);
             auto time = std::chrono::steady_clock::now() + timeout;
             auto task = std::make_shared<TaskWithCallable<TCallable>>(std::forward<TCallable>(newTask));
             TaskHandle handle { task };
-            delayedQueue.emplace(std::make_unique<DelayedTaskWrapper>(time, std::move(task)));
+            {
+                const std::lock_guard lock(taskQueueMutex);
+                delayedQueue.emplace(std::make_unique<DelayedTaskWrapper>(time, std::move(task)));
+            }
             notifyQueueChange();
             return handle;
         }
@@ -178,8 +184,10 @@ public:
             }
             else
             {
-                const std::lock_guard lock(taskQueueMutex);
-                taskQueue.emplace(task);
+                {
+                    const std::lock_guard lock(taskQueueMutex);
+                    taskQueue.emplace(task);
+                }
                 notifyQueueChange();
             }
             return handle;
@@ -637,13 +645,25 @@ protected:
         }
     }
 
+    // The run loop checks the queues and then waits on queueWait, both under
+    // waitMutex. Taking waitMutex before notifying makes that check-then-wait
+    // atomic with respect to the notification: either the loop has not checked yet
+    // and will find the new task, or it is already inside wait() and gets woken.
+    // Without this, a task pushed between the check and the wait was only picked
+    // up when the next one arrived.
     inline void notifyQueueOne()
     {
+        {
+            const std::lock_guard lock(waitMutex);
+        }
         queueWait.notify_one();
     }
 
     inline void notifyQueueAll()
     {
+        {
+            const std::lock_guard lock(waitMutex);
+        }
         queueWait.notify_all();
     }
     
